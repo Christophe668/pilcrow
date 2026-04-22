@@ -1,0 +1,56 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# tests
+coverage/
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env.local
+.env*.local
+
+# local Claude Code workspace state
+.claude/
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+.playwright-mcp/
+
+# local design history — kept on disk, not pushed
+wallabag-prototype.html
+docs/superpowers/
+compose.dev.yaml

@@ -1,0 +1,22 @@
+node_modules/
+ios/
+android/
+.expo/
+dist/
+web-build/
+coverage/
+tests/coverage/
+
+# Lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Generated
+expo-env.d.ts
+
+# Static prototype/reference assets
+wallabag-prototype.html
+
+# Plan/spec docs are human-authored markdown, leave formatting alone
+docs/

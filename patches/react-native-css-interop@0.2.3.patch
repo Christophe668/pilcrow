@@ -1,0 +1,17 @@
+diff --git a/dist/metro/index.js b/dist/metro/index.js
+index c91ba6adf049dd5c6eec1ec8301ecc0802f41bfc..63b783e2e47e16a1f6814649a066027a9e017498 100644
+--- a/dist/metro/index.js
++++ b/dist/metro/index.js
+@@ -177,6 +177,12 @@ async function startCSSProcessor(filePath, platform, isDev, { input, getCSSForPl
+                 : getNativeJS((0, css_to_rn_1.cssToReactNativeRuntime)(css, options), debug)));
+             debug(`virtualStyles.emit ${platform}`);
+             haste.emit("change", {
++                // Metro >= 0.83's DependencyGraph._onHasteChange reads these
++                // three arrays directly off the event. The older eventsQueue
++                // shape is kept for forward/backward compatibility.
++                addedFiles: new Map(),
++                modifiedFiles: new Map([[filePath, { size: 1, mtime: Date.now() }]]),
++                removedFiles: new Map(),
+                 eventsQueue: [
+                     {
+                         filePath,

@@ -1,0 +1,85 @@
+import "../global.css";
+import { useEffect, useState } from "react";
+import { Slot, useRouter, useSegments } from "expo-router";
+import { useColorScheme, View, Platform } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "@/theme/provider";
+import { useAppFonts } from "@/theme/fonts";
+import { hydrateAuth } from "@/auth/state";
+import { useAuth } from "@/hooks/useAuth";
+import { useBootstrapSync } from "@/hooks/useBootstrapSync";
+import { decideRoute } from "@/lib/route-decision";
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+});
+
+function AuthGate() {
+  const auth = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+  const platform = (Platform.OS === "web" ? "web" : Platform.OS) as "web" | "ios" | "android";
+  const decision = decideRoute(platform, auth.status, segments);
+
+  useEffect(() => {
+    if (decision.kind === "redirect") {
+      router.replace(decision.to as never);
+    }
+  }, [decision, router]);
+
+  useBootstrapSync();
+
+  if (decision.kind !== "render") {
+    return <View className="flex-1 bg-bg" />;
+  }
+  return <Slot />;
+}
+
+export default function RootLayout() {
+  const colorScheme = useColorScheme();
+  const systemScheme = colorScheme === "dark" ? "dark" : "light";
+  const { loaded, error } = useAppFonts();
+  const [hydrated, setHydrated] = useState(false);
+  const [fontTimeout, setFontTimeout] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    hydrateAuth()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setHydrated(true);
+      });
+    // Belt-and-suspenders: even if `hydrateAuth` itself never settles,
+    // unblock the gate after 4 seconds so the app never sits on a blank
+    // splash forever.
+    const safety = setTimeout(() => {
+      if (!cancelled) setHydrated(true);
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
+  }, []);
+
+  // expo-font occasionally never resolves on Android when the variable
+  // font file is huge or the network blip stalls — fall through after 4s
+  // so the rest of the app still mounts.
+  useEffect(() => {
+    if (loaded || error) return;
+    const t = setTimeout(() => setFontTimeout(true), 4000);
+    return () => clearTimeout(t);
+  }, [loaded, error]);
+
+  const fontsReady = loaded || error !== null || fontTimeout;
+  if (!fontsReady || !hydrated) return null;
+  return (
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider initialMode="auto" systemScheme={systemScheme}>
+          <AuthGate />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
+  );
+}

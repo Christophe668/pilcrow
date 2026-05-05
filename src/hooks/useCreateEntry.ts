@@ -1,0 +1,39 @@
+import { useMutation } from "@tanstack/react-query";
+import { getDb } from "@/db";
+import { upsertArticles } from "@/db/repos/articles";
+import { enqueue } from "@/db/repos/outbox";
+import { dataEvents } from "@/sync/events";
+
+let nextTempId = -1;
+
+export async function createEntryAction(url: string, tags?: readonly string[]): Promise<number> {
+  const db = await getDb();
+  const tempId = nextTempId--;
+  const now = new Date().toISOString();
+
+  await upsertArticles(db, [
+    {
+      id: tempId,
+      title: url,
+      url,
+      pending_op: "create",
+      created_at: now,
+      updated_at: now,
+      local_updated_at: now,
+    },
+  ]);
+
+  const payload: { tempId: number; url: string; tags?: string[] } = { tempId, url };
+  if (tags && tags.length > 0) payload.tags = [...tags];
+  await enqueue(db, "createEntry", payload);
+
+  dataEvents.emit({ kind: "articles" });
+  return tempId;
+}
+
+export function useCreateEntry() {
+  return useMutation({
+    mutationFn: ({ url, tags }: { url: string; tags?: readonly string[] }) =>
+      createEntryAction(url, tags),
+  });
+}

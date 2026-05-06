@@ -58,6 +58,7 @@ body {
   margin: 0 auto;
   -webkit-text-size-adjust: 100%;
 }
+article > h1:first-child, article > h2:first-child, article > h3:first-child { margin-top: 0; }
 h1, h2, h3 { font-family: var(--reader-font); line-height: 1.2; margin-top: 1.5em; }
 h1 {
   font-size: 2.2em;
@@ -70,7 +71,9 @@ h1 {
 h2 { font-size: 1.3em; font-weight: 600; }
 h3 { font-size: 1.1em; font-weight: 600; }
 p { margin: 0 0 1em; text-wrap: pretty; }
-p:first-of-type::first-letter {
+/* Drop cap only on the very first paragraph that's a direct child of <article> —
+   never inside blockquotes, list items, or code blocks. */
+article > p:first-of-type::first-letter {
   font-size: 3.4em;
   float: left;
   line-height: 0.92;
@@ -80,6 +83,9 @@ p:first-of-type::first-letter {
 }
 a { color: var(--reader-accent); }
 img, video { max-width: 100%; height: auto; border-radius: 8px; margin: 1em 0; }
+ul, ol { margin: 0 0 1em; padding-inline-start: 1.4em; }
+li { margin-bottom: 0.4em; }
+li > p { margin: 0 0 0.4em; }
 blockquote {
   font-style: italic;
   font-size: 1.15em;
@@ -90,14 +96,41 @@ blockquote {
   border-left: 2px solid var(--reader-accent);
   text-wrap: balance;
 }
-pre, code {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 0.9em;
-  background: var(--reader-border);
-  border-radius: 4px;
+pre {
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  font-style: normal;
+  line-height: 1.5;
+  background: ${p.bg === DARK.bg ? "#0e0c0a" : p.bg === SEPIA.bg ? "#ece2c8" : "#f0eae2"};
+  color: var(--reader-fg);
+  border: 1px solid var(--reader-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 1.4em 0;
+  overflow-x: auto;
+  white-space: pre;
+  word-wrap: normal;
+  -webkit-text-size-adjust: none;
 }
-pre { padding: 0.75em 1em; overflow-x: auto; }
-code { padding: 0.1em 0.3em; }
+pre code {
+  font-family: inherit;
+  font-size: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  white-space: inherit;
+}
+code {
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  font-style: normal;
+  background: ${p.bg === DARK.bg ? "#2a2520" : p.bg === SEPIA.bg ? "#dfd1ad" : "#ece5dc"};
+  color: var(--reader-fg);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  white-space: pre-wrap;
+}
 hr { border: 0; border-top: 1px solid var(--reader-border); margin: 2em 0; }
 mark {
   background: ${p.bg === DARK.bg ? "#5e5526" : "#f6e6a8"};

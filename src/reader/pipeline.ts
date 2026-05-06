@@ -1,6 +1,7 @@
 import type { ReaderPrefs } from "./prefs";
 import { readerStylesTag } from "./styles";
 import { READER_BRIDGE_FULL_JS } from "./bridge";
+import { rewriteCodeBlocks } from "./code-blocks";
 import { rewriteImages } from "@/images/rewrite";
 
 export type BuildReaderArgs = {
@@ -20,7 +21,8 @@ export type BuiltReader = {
 };
 
 export function buildReaderHtml(args: BuildReaderArgs): BuiltReader {
-  const { html: rewritten, pendingSources } = rewriteImages(args.contentHtml, args.imageLookup);
+  const withCodeBlocks = rewriteCodeBlocks(args.contentHtml);
+  const { html: rewritten, pendingSources } = rewriteImages(withCodeBlocks, args.imageLookup);
 
   const doc = `<!doctype html>
 <html lang="en">

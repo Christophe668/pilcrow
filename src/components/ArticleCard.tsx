@@ -86,7 +86,7 @@ export function ArticleCard(props: ArticleCardProps) {
         accessibilityRole="button"
         accessibilityLabel={`open ${props.title ?? props.url}`}
         onPress={openArticle}
-        className="flex-1 flex-row gap-4 items-start active:bg-surface-2 -mx-2 px-2 -my-1 py-1 rounded-md"
+        className="flex-1 min-w-0 flex-row gap-4 items-start active:bg-surface-2 -mx-2 px-2 -my-1 py-1 rounded-md"
       >
         <View className="w-16 h-16 rounded-md border border-border bg-accent-soft items-center justify-center overflow-hidden">
           {props.previewImage ? (

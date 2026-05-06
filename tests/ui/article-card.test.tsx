@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("expo-router", () => ({
   Link: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 
 import { ArticleCard, type ArticleCardProps } from "@/components/ArticleCard";

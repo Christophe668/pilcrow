@@ -3,7 +3,7 @@ import { listEntries } from "@/api/entries";
 import { listTags as apiListTags } from "@/api/tags";
 import { upsertArticles, type ArticleRow } from "@/db/repos/articles";
 import { upsertTags, attachTags } from "@/db/repos/tags";
-import { setSyncValue } from "@/db/repos/sync-state";
+import { setSyncValue, getSyncValue } from "@/db/repos/sync-state";
 import { dataEvents } from "./events";
 import type { Entry } from "@/api/types";
 
@@ -68,6 +68,56 @@ export async function runInitialSync(): Promise<void> {
     await setSyncValue(db, "last_since", String(Math.floor(Date.parse(mostRecent) / 1000)));
   }
   await setSyncValue(db, "last_full_sync_at", new Date().toISOString());
+
+  dataEvents.emit({ kind: "articles" });
+  dataEvents.emit({ kind: "tags" });
+  dataEvents.emit({ kind: "sync-status" });
+}
+
+export async function runIncrementalSync(): Promise<void> {
+  const db = await getDb();
+  const since = await getSyncValue(db, "last_since");
+  const sinceNum = since ? Number(since) : undefined;
+
+  const tags = await apiListTags();
+  await upsertTags(db, tags);
+
+  let page = 1;
+  let totalPages = 1;
+  let mostRecent: string | null = null;
+
+  while (page <= totalPages) {
+    const result = await listEntries({
+      page,
+      perPage: PER_PAGE,
+      detail: "full",
+      ...(sinceNum !== undefined ? { since: sinceNum } : {}),
+    });
+    totalPages = result.pages;
+    if (result._embedded.items.length === 0) break;
+
+    const rows = result._embedded.items.map(entryToRow);
+    await upsertArticles(db, rows);
+
+    for (const e of result._embedded.items) {
+      if (e.tags.length > 0) {
+        await attachTags(
+          db,
+          e.id,
+          e.tags.map((t) => t.id),
+        );
+      }
+      if (!mostRecent || (e.updated_at && e.updated_at > mostRecent)) {
+        mostRecent = e.updated_at;
+      }
+    }
+    page += 1;
+    if (totalPages === 0) break;
+  }
+
+  if (mostRecent) {
+    await setSyncValue(db, "last_since", String(Math.floor(Date.parse(mostRecent) / 1000)));
+  }
 
   dataEvents.emit({ kind: "articles" });
   dataEvents.emit({ kind: "tags" });

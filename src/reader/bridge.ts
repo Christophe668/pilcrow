@@ -1,3 +1,5 @@
+import { ANNOTATIONS_BRIDGE_JS } from "./annotations-bridge";
+
 /**
  * The bridge runs inside the article HTML. It posts these message kinds:
  *  - { kind: "scroll", position: 0..1 }  (debounced)
@@ -61,3 +63,5 @@ export const READER_BRIDGE_JS = `(function () {
 
   send({ kind: 'ready' });
 })();`;
+
+export const READER_BRIDGE_FULL_JS = `${READER_BRIDGE_JS}\n${ANNOTATIONS_BRIDGE_JS}`;

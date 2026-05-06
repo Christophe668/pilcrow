@@ -184,3 +184,142 @@ export function deserializeRange(ser: SerializedRange, root: Element): Range | n
   }
   return range;
 }
+
+/**
+ * Source string of the serializer suitable for injection into a WebView/iframe.
+ * Mirrors the exported functions but as a self-contained IIFE.
+ */
+export const RANGE_SERIALIZER_SOURCE = `
+(function () {
+  function elementPathFromRoot(node, root) {
+    var parts = [];
+    var n = node;
+    while (n && n !== root) {
+      if (n.nodeType === 1) {
+        var tag = n.tagName.toLowerCase();
+        var idx = 1;
+        var prev = n.previousElementSibling;
+        while (prev) {
+          if (prev.tagName === n.tagName) idx += 1;
+          prev = prev.previousElementSibling;
+        }
+        parts.unshift(tag + '[' + idx + ']');
+      }
+      n = n.parentNode;
+    }
+    if (n !== root) return null;
+    return '/' + parts.join('/');
+  }
+  function elementOffsetFor(block, target, targetOffset) {
+    var acc = 0, found = false;
+    function walk(node) {
+      if (found) return;
+      if (node.nodeType === 3) {
+        if (node === target) { acc += targetOffset; found = true; return; }
+        acc += node.data.length;
+        return;
+      }
+      if (node.nodeType === 1) {
+        for (var i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+      }
+    }
+    walk(block);
+    return acc;
+  }
+  function elementTextLength(block) {
+    var acc = 0;
+    function walk(node) {
+      if (node.nodeType === 3) { acc += node.data.length; return; }
+      for (var i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+    }
+    walk(block);
+    return acc;
+  }
+  function startBlockElement(node, root) {
+    var el = node.nodeType === 1 ? node : node.parentNode;
+    while (el && el !== root) {
+      if (el.nodeType === 1) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
+  function serializeRange(range, root) {
+    if (!range || range.collapsed) return null;
+    var startBlock = startBlockElement(range.startContainer, root);
+    var endBlock = startBlockElement(range.endContainer, root);
+    if (!startBlock) return null;
+    var startPath = elementPathFromRoot(startBlock, root);
+    if (!startPath) return null;
+    var startOffset = range.startContainer.nodeType === 3
+      ? elementOffsetFor(startBlock, range.startContainer, range.startOffset)
+      : 0;
+    if (endBlock && startBlock === endBlock) {
+      var endOffset = range.endContainer.nodeType === 3
+        ? elementOffsetFor(startBlock, range.endContainer, range.endOffset)
+        : elementTextLength(startBlock);
+      return { start: startPath, startOffset: startOffset, end: startPath, endOffset: endOffset };
+    }
+    return { start: startPath, startOffset: startOffset, end: startPath, endOffset: elementTextLength(startBlock) };
+  }
+  function resolveElementPath(path, root) {
+    if (!path || path[0] !== '/') return null;
+    var segments = path.slice(1).split('/').filter(Boolean);
+    var cur = root;
+    for (var i = 0; i < segments.length; i++) {
+      var m = /^([a-zA-Z][a-zA-Z0-9]*)(?:\\[(\\d+)\\])?$/.exec(segments[i]);
+      if (!m) return null;
+      var tag = m[1].toLowerCase();
+      var want = m[2] ? parseInt(m[2], 10) : 1;
+      var found = null;
+      var idx = 0;
+      var children = cur.children;
+      for (var j = 0; j < children.length; j++) {
+        if (children[j].tagName.toLowerCase() === tag) {
+          idx += 1;
+          if (idx === want) { found = children[j]; break; }
+        }
+      }
+      if (!found) return null;
+      cur = found;
+    }
+    return cur;
+  }
+  function locateOffsetInBlock(block, offset) {
+    var acc = 0;
+    var lastText = null;
+    function walk(node) {
+      if (node.nodeType === 3) {
+        lastText = node;
+        var len = node.data.length;
+        if (offset <= acc + len) return { node: node, offset: offset - acc };
+        acc += len;
+        return null;
+      }
+      if (node.nodeType === 1) {
+        for (var i = 0; i < node.childNodes.length; i++) {
+          var f = walk(node.childNodes[i]);
+          if (f) return f;
+        }
+      }
+      return null;
+    }
+    var f = walk(block);
+    if (f) return f;
+    if (lastText) return { node: lastText, offset: lastText.data.length };
+    return null;
+  }
+  function deserializeRange(ser, root) {
+    var sb = resolveElementPath(ser.start, root);
+    var eb = resolveElementPath(ser.end, root);
+    if (!sb || !eb) return null;
+    var s = locateOffsetInBlock(sb, ser.startOffset);
+    var e = locateOffsetInBlock(eb, ser.endOffset);
+    if (!s || !e) return null;
+    var range = document.createRange();
+    try { range.setStart(s.node, s.offset); range.setEnd(e.node, e.offset); }
+    catch (_) { return null; }
+    return range;
+  }
+  window.__rangeSerializer = { serializeRange: serializeRange, deserializeRange: deserializeRange };
+})();
+`;

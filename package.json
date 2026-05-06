@@ -31,6 +31,7 @@
     "expo-system-ui": "^55.0.17",
     "nativewind": "^4.2.3",
     "react": "19.2.5",
+    "react-dom": "19.2.5",
     "react-hook-form": "^7.75.0",
     "react-native": "0.85.3",
     "react-native-css-interop": "^0.2.3",

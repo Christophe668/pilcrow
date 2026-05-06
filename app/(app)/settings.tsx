@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "@/auth/state";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { useSyncNow } from "@/hooks/useSyncNow";
+import { BookmarkletCard } from "@/components/BookmarkletCard";
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "never";
@@ -59,6 +60,12 @@ export default function Settings() {
             <Text className="text-accent text-sm">Sync now</Text>
           )}
         </Pressable>
+      </Section>
+
+      <Section title="Save shortcuts">
+        <View className="px-1 py-1">
+          <BookmarkletCard />
+        </View>
       </Section>
 
       <Pressable

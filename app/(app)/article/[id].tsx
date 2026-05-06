@@ -120,15 +120,35 @@ export default function ArticleRoute() {
     );
   }
 
+  const meta = [
+    article.data.domain_name,
+    article.data.reading_time ? `${article.data.reading_time} min` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const progressPct = Math.round((article.data.scroll_position ?? 0) * 100);
+
   return (
     <View className="flex-1 bg-bg">
-      <View className="px-6 pt-12 pb-3 border-b border-border flex-row items-center justify-between">
-        <Pressable accessibilityRole="button" onPress={() => router.back()}>
-          <Text className="text-accent text-base">← Back</Text>
+      <View className="px-6 pt-12 pb-3 border-b border-border bg-bg flex-row items-center gap-3">
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          className="px-2 py-1.5 rounded-md"
+        >
+          <Text className="text-muted text-sm">← Back</Text>
         </Pressable>
-        <Text className="text-subtle text-xs flex-1 ml-3" numberOfLines={1}>
-          {article.data.url}
-        </Text>
+        <View className="flex-1 items-center">
+          {meta.length > 0 ? (
+            <Text className="text-muted text-xs" numberOfLines={1}>
+              {meta}
+            </Text>
+          ) : null}
+          <View className="h-[2px] w-[80px] bg-border rounded-full mt-1.5 overflow-hidden">
+            <View className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
+          </View>
+        </View>
+        <View className="w-[60px]" />
       </View>
       <View className="flex-1">
         {built ? (

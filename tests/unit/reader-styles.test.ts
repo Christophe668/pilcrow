@@ -23,4 +23,10 @@ describe("readerStylesTag", () => {
     const css = readerStylesTag({ fontSize: "M", fontFamily: "sans", theme: "light" });
     expect(css).toMatch(/--reader-font:\s*-apple-system/);
   });
+
+  it("includes drop-cap rule and roomy body line-height", () => {
+    const css = readerStylesTag({ fontSize: "M", fontFamily: "serif", theme: "light" });
+    expect(css).toContain("p:first-of-type::first-letter");
+    expect(css).toMatch(/line-height:\s*1\.65/);
+  });
 });

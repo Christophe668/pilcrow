@@ -41,7 +41,14 @@ Phase 4 (Reader) complete:
 - Scroll-position resume across opens
 - Action bar: star, archive, share, prefs, delete
 
-Annotations creation, share targets, and release pipeline arrive in later phases.
+Phase 5a (Add by URL) complete:
+
+- In-app "Save article" modal at /add with URL + tags fields
+- Floating + button on the library; "+" tab in the phone bottom bar
+- Web bookmarklet (drag to bookmarks bar) in Settings → Save shortcuts
+- Optimistic create via the Phase-2 outbox: appears in the library immediately, server fetches the body in the background
+
+Native share targets (iOS share extension, Android intent filter) and the release pipeline arrive in later phases.
 
 ## Develop
 

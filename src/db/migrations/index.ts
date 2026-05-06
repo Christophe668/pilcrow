@@ -1,10 +1,12 @@
 import type { DbDriver } from "../driver";
 import sql001 from "./001_initial.sql";
+import sql002 from "./002_fts.sql";
 
 type Migration = { version: number; sql: string; name: string };
 
 const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: sql001 as unknown as string, name: "001_initial" },
+  { version: 2, sql: sql002 as unknown as string, name: "002_fts" },
 ];
 
 async function ensureRegistry(db: DbDriver): Promise<void> {

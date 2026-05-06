@@ -4,7 +4,7 @@ import { kvGet } from "@/lib/async-storage";
 
 export type RequestArgs = {
   serverUrl: string;
-  method: "GET" | "POST" | "PATCH" | "DELETE";
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   path: string;
   query?: Record<string, string | number | undefined>;
   body?: unknown;

@@ -46,3 +46,12 @@ export type EntriesPage = {
 };
 
 export type EntryDetail = "metadata" | "full";
+
+export type Annotation = {
+  id: number;
+  quote: string;
+  text: string | null;
+  ranges: { start: string; startOffset: number; end: string; endOffset: number }[];
+  created_at: string;
+  updated_at: string;
+};

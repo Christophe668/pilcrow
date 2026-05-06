@@ -1,6 +1,7 @@
 import { Slot } from "expo-router";
 import { View } from "react-native";
 import { Rail } from "@/components/Rail";
+import { FabAdd } from "@/components/FabAdd";
 import { useBreakpoint } from "@/hooks/useResponsive";
 
 export default function LibraryLayout() {
@@ -15,6 +16,7 @@ export default function LibraryLayout() {
       ) : null}
       <View className="flex-1">
         <Slot />
+        <FabAdd />
       </View>
     </View>
   );

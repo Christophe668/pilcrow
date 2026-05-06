@@ -31,6 +31,13 @@ export default tseslint.config(
       "@typescript-eslint/no-require-imports": "off",
     },
   },
+  // Font loader uses `require()` for `.ttf` assets (Metro asset resolution).
+  {
+    files: ["src/theme/fonts.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   // The recommended `tseslint.configs.X` access pattern is flagged as
   // `import/no-named-as-default-member`; silence it on this config file.
   {

@@ -18,7 +18,16 @@ const config: ExpoConfig = {
     bundler: "metro",
     output: "static",
   },
-  plugins: ["expo-router", "expo-font", "expo-secure-store"],
+  plugins: [
+    "expo-router",
+    [
+      "expo-font",
+      {
+        fonts: ["./assets/fonts/Newsreader.ttf", "./assets/fonts/Newsreader-Italic.ttf"],
+      },
+    ],
+    "expo-secure-store",
+  ],
   experiments: {
     typedRoutes: true,
   },

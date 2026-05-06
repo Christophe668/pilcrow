@@ -65,6 +65,25 @@ describe("ArticleCard", () => {
     expect(screen.getByText(/Hello world\s*,? this is the body/)).toBeTruthy();
   });
 
+  it("renders the preview_picture when provided", () => {
+    render(
+      <ArticleCard
+        id={1}
+        title="x"
+        url="https://example.com/x"
+        domain="example.com"
+        readingTime={null}
+        isStarred={false}
+        isArchived={false}
+        updatedAt={null}
+        previewImage="https://example.com/preview.jpg"
+        tags={[]}
+      />,
+    );
+    // The Image component renders as a host element on web; just verify no crash + glyph is absent
+    expect(screen.queryByText("X")).toBeNull();
+  });
+
   it("falls back to URL when title is null", () => {
     render(
       <ArticleCard

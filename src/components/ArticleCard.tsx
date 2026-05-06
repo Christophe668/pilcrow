@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { Link, type Href } from "expo-router";
 import { TagChip } from "./TagChip";
 
@@ -62,10 +62,19 @@ export function ArticleCard(props: ArticleCardProps) {
           />
         ) : null}
         <View className="flex-row gap-4 items-start">
-          <View className="w-16 h-16 rounded-md border border-border bg-accent-soft items-center justify-center">
-            <Text className="font-display text-accent-ink text-2xl font-medium">
-              {glyphFor(props.title, props.domain, props.url)}
-            </Text>
+          <View className="w-16 h-16 rounded-md border border-border bg-accent-soft items-center justify-center overflow-hidden">
+            {props.previewImage ? (
+              <Image
+                source={{ uri: props.previewImage }}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="cover"
+                accessibilityIgnoresInvertColors
+              />
+            ) : (
+              <Text className="font-display text-accent-ink text-2xl font-medium">
+                {glyphFor(props.title, props.domain, props.url)}
+              </Text>
+            )}
           </View>
           <View className="flex-1 min-w-0">
             {meta.length > 0 ? <Text className="text-subtle text-xs mb-1">{meta}</Text> : null}

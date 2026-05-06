@@ -4,6 +4,7 @@ import type { Href } from "expo-router";
 
 const TABS = [
   { route: "/(app)/(library)" as Href, label: "Library", segment: "(library)" },
+  { route: "/(app)/add" as Href, label: "+", segment: "add" },
   { route: "/(app)/(library)/search" as Href, label: "Search", segment: "search" },
   { route: "/(app)/settings" as Href, label: "Settings", segment: "settings" },
 ] as const;

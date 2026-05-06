@@ -57,37 +57,39 @@ export default function CredentialsScreen() {
   });
 
   return (
-    <View className="flex-1 bg-bg px-6 justify-center">
-      <Text className="font-display text-fg text-3xl mb-1">Connect</Text>
-      <Text className="text-muted text-sm mb-6">{hostOf(serverUrl)}</Text>
+    <View className="flex-1 bg-bg items-center justify-center px-6">
+      <View className="w-full max-w-[420px]">
+        <Text className="font-display text-fg text-3xl mb-1">Connect</Text>
+        <Text className="text-muted text-sm mb-6">{hostOf(serverUrl)}</Text>
 
-      <Pressable
-        onPress={() =>
-          serverUrl ? Linking.openURL(`${serverUrl}/developer/client/create`) : undefined
-        }
-      >
-        <Text className="text-accent text-sm mb-6">Need a client_id and secret?</Text>
-      </Pressable>
+        <Pressable
+          onPress={() =>
+            serverUrl ? Linking.openURL(`${serverUrl}/developer/client/create`) : undefined
+          }
+        >
+          <Text className="text-accent text-sm mb-6">Need a client_id and secret?</Text>
+        </Pressable>
 
-      <Field control={control} name="clientId" placeholder="Client ID" />
-      <Field control={control} name="clientSecret" placeholder="Client Secret" secure />
-      <Field control={control} name="username" placeholder="Username" />
-      <Field control={control} name="password" placeholder="Password" secure />
+        <Field control={control} name="clientId" placeholder="Client ID" />
+        <Field control={control} name="clientSecret" placeholder="Client Secret" secure />
+        <Field control={control} name="username" placeholder="Username" />
+        <Field control={control} name="password" placeholder="Password" secure />
 
-      {topError ? <Text className="text-accent text-sm mt-3">{topError}</Text> : null}
+        {topError ? <Text className="text-accent text-sm mt-3">{topError}</Text> : null}
 
-      <Pressable
-        accessibilityRole="button"
-        disabled={submitting}
-        onPress={onSubmit}
-        className="bg-accent rounded-md py-3 mt-6 items-center"
-      >
-        {submitting ? (
-          <ActivityIndicator />
-        ) : (
-          <Text className="text-white font-medium">Sign in</Text>
-        )}
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={submitting}
+          onPress={onSubmit}
+          className="bg-accent rounded-md py-3 mt-6 items-center"
+        >
+          {submitting ? (
+            <ActivityIndicator />
+          ) : (
+            <Text className="text-white font-medium">Sign in</Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }

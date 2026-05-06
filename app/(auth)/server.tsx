@@ -38,48 +38,50 @@ export default function ServerScreen() {
   });
 
   return (
-    <View className="flex-1 bg-bg px-6 justify-center">
-      <Text className="font-display text-fg text-4xl mb-2">wallabag</Text>
-      <Text className="text-muted text-base mb-10">Connect to your server</Text>
+    <View className="flex-1 bg-bg items-center justify-center px-6">
+      <View className="w-full max-w-[420px]">
+        <Text className="font-display text-fg text-4xl mb-2">wallabag</Text>
+        <Text className="text-muted text-base mb-10">Connect to your server</Text>
 
-      <Text className="text-fg text-sm mb-2">Server URL</Text>
-      <Controller
-        control={control}
-        name="serverUrl"
-        render={({ field: { value, onChange, onBlur }, fieldState }) => (
-          <View>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              placeholder="Server URL (e.g. https://app.wallabag.it)"
-              placeholderTextColor="#888"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              className="border border-border bg-surface text-fg rounded-md px-3 py-3"
-            />
-            {fieldState.error ? (
-              <Text className="text-accent text-xs mt-1">{fieldState.error.message}</Text>
-            ) : null}
-          </View>
-        )}
-      />
+        <Text className="text-fg text-sm mb-2">Server URL</Text>
+        <Controller
+          control={control}
+          name="serverUrl"
+          render={({ field: { value, onChange, onBlur }, fieldState }) => (
+            <View>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                placeholder="Server URL (e.g. https://app.wallabag.it)"
+                placeholderTextColor="#888"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                className="border border-border bg-surface text-fg rounded-md px-3 py-3"
+              />
+              {fieldState.error ? (
+                <Text className="text-accent text-xs mt-1">{fieldState.error.message}</Text>
+              ) : null}
+            </View>
+          )}
+        />
 
-      {topError ? <Text className="text-accent text-sm mt-4">{topError}</Text> : null}
+        {topError ? <Text className="text-accent text-sm mt-4">{topError}</Text> : null}
 
-      <Pressable
-        accessibilityRole="button"
-        disabled={submitting}
-        onPress={onSubmit}
-        className="bg-accent rounded-md py-3 mt-6 items-center"
-      >
-        {submitting ? (
-          <ActivityIndicator />
-        ) : (
-          <Text className="text-white font-medium">Continue</Text>
-        )}
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={submitting}
+          onPress={onSubmit}
+          className="bg-accent rounded-md py-3 mt-6 items-center"
+        >
+          {submitting ? (
+            <ActivityIndicator />
+          ) : (
+            <Text className="text-white font-medium">Continue</Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }

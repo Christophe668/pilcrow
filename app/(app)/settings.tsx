@@ -39,43 +39,45 @@ export default function Settings() {
   const host = auth.status === "authenticated" ? new URL(auth.serverUrl).host : "—";
 
   return (
-    <View className="flex-1 bg-bg px-6 pt-16">
-      <Text className="font-display text-fg text-3xl mb-6">Settings</Text>
+    <View className="flex-1 bg-bg items-center pt-16 px-6">
+      <View className="w-full max-w-[680px]">
+        <Text className="font-display text-fg text-3xl mb-6">Settings</Text>
 
-      <Section title="Account">
-        <Row label="Server" value={host} />
-      </Section>
+        <Section title="Account">
+          <Row label="Server" value={host} />
+        </Section>
 
-      <Section title="Sync">
-        <Row label="Last sync" value={relativeTime(status.data?.lastFullSyncAt ?? null)} />
+        <Section title="Sync">
+          <Row label="Last sync" value={relativeTime(status.data?.lastFullSyncAt ?? null)} />
+          <Pressable
+            accessibilityRole="button"
+            disabled={sync.isPending}
+            onPress={() => sync.mutate()}
+            className="px-4 py-3 border-t border-border"
+          >
+            {sync.isPending ? (
+              <ActivityIndicator />
+            ) : (
+              <Text className="text-accent text-sm">Sync now</Text>
+            )}
+          </Pressable>
+        </Section>
+
+        <Section title="Save shortcuts">
+          <View className="px-1 py-1">
+            <BookmarkletCard />
+          </View>
+        </Section>
+
         <Pressable
           accessibilityRole="button"
-          disabled={sync.isPending}
-          onPress={() => sync.mutate()}
-          className="px-4 py-3 border-t border-border"
+          disabled={signingOut}
+          onPress={onSignOut}
+          className="border border-border bg-surface rounded-md py-3 items-center mt-8"
         >
-          {sync.isPending ? (
-            <ActivityIndicator />
-          ) : (
-            <Text className="text-accent text-sm">Sync now</Text>
-          )}
+          {signingOut ? <ActivityIndicator /> : <Text className="text-accent">Sign out</Text>}
         </Pressable>
-      </Section>
-
-      <Section title="Save shortcuts">
-        <View className="px-1 py-1">
-          <BookmarkletCard />
-        </View>
-      </Section>
-
-      <Pressable
-        accessibilityRole="button"
-        disabled={signingOut}
-        onPress={onSignOut}
-        className="border border-border bg-surface rounded-md py-3 items-center mt-8"
-      >
-        {signingOut ? <ActivityIndicator /> : <Text className="text-accent">Sign out</Text>}
-      </Pressable>
+      </View>
     </View>
   );
 }

@@ -53,7 +53,7 @@ describe("Credentials screen", () => {
     fireEvent.changeText(screen.getByPlaceholderText(/username/i), "u");
     fireEvent.changeText(screen.getByPlaceholderText(/password/i), "p");
     fireEvent.press(screen.getByRole("button", { name: /sign in/i }));
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/(app)"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/(app)/(library)"));
     expect(secure.get("wb_access_token")).toBe("at");
     expect(secure.get("wb_username")).toBe("u");
     expect(secure.has("wb_password")).toBe(false);

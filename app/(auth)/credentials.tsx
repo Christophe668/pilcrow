@@ -47,7 +47,7 @@ export default function CredentialsScreen() {
         username: data.username,
         bundle,
       });
-      router.replace("/(app)");
+      router.replace("/(app)/(library)");
     } catch (e) {
       if (e instanceof InvalidCredentialsError) setTopError("Invalid credentials");
       else setTopError(e instanceof Error ? e.message : "Sign-in failed");

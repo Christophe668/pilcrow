@@ -28,7 +28,7 @@ function AuthGate() {
   useEffect(() => {
     if (auth.status === "unknown") return;
     if (auth.status === "authenticated" && inAuthGroup) {
-      router.replace("/(app)");
+      router.replace("/(app)/(library)");
     } else if (auth.status === "unauthenticated" && !inAuthGroup) {
       router.replace("/(auth)/server");
     }

@@ -1,6 +1,8 @@
 import { Image, Pressable, Text, View } from "react-native";
 import { Link, type Href } from "expo-router";
 import { TagChip } from "./TagChip";
+import { useToggleStarred } from "@/hooks/useToggleStarred";
+import { useToggleArchived } from "@/hooks/useToggleArchived";
 
 export type ArticleCardProps = {
   id: number;
@@ -44,24 +46,26 @@ function glyphFor(title: string | null, domain: string | null, url: string): str
 }
 
 export function ArticleCard(props: ArticleCardProps) {
+  const star = useToggleStarred();
+  const archive = useToggleArchived();
   const meta = [props.domain, props.readingTime ? `${props.readingTime} min` : null]
     .filter(Boolean)
     .join(" · ");
   const excerpt = htmlToExcerpt(props.excerpt);
   const showUnreadBar = !props.isArchived;
   return (
-    <Link href={`/(app)/article/${props.id}` as Href} asChild>
-      <Pressable
-        accessibilityRole="button"
-        className="border-b border-border px-6 py-5 active:bg-surface-2 relative"
-      >
-        {showUnreadBar ? (
-          <View
-            className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent"
-            accessibilityLabel="unread"
-          />
-        ) : null}
-        <View className="flex-row gap-4 items-start">
+    <View className="flex-row items-stretch border-b border-border px-6 py-5 relative">
+      {showUnreadBar ? (
+        <View
+          className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent"
+          accessibilityLabel="unread"
+        />
+      ) : null}
+      <Link href={`/(app)/article/${props.id}` as Href} asChild>
+        <Pressable
+          accessibilityRole="button"
+          className="flex-1 flex-row gap-4 items-start active:bg-surface-2 -mx-2 px-2 -my-1 py-1 rounded-md"
+        >
           <View className="w-16 h-16 rounded-md border border-border bg-accent-soft items-center justify-center overflow-hidden">
             {props.previewImage ? (
               <Image
@@ -97,13 +101,30 @@ export function ArticleCard(props: ArticleCardProps) {
               </View>
             ) : null}
           </View>
-          {props.isStarred ? (
-            <Text className="text-accent text-sm" accessibilityLabel="starred">
-              ★
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
-    </Link>
+        </Pressable>
+      </Link>
+      <View className="flex-col items-center justify-start ml-3 gap-1">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={props.isStarred ? "unstar" : "star"}
+          onPress={() => star.mutate({ id: props.id, starred: !props.isStarred })}
+          className="w-9 h-9 items-center justify-center rounded-md active:bg-surface-2"
+        >
+          <Text className={props.isStarred ? "text-accent text-base" : "text-subtle text-base"}>
+            {props.isStarred ? "★" : "☆"}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={props.isArchived ? "unarchive" : "archive"}
+          onPress={() => archive.mutate({ id: props.id, archived: !props.isArchived })}
+          className="w-9 h-9 items-center justify-center rounded-md active:bg-surface-2"
+        >
+          <Text className={props.isArchived ? "text-accent text-xs" : "text-subtle text-xs"}>
+            {props.isArchived ? "↩" : "▥"}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }

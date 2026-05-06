@@ -43,53 +43,59 @@ export function ActionBar(props: ActionBarProps) {
   };
 
   return (
-    <View className="flex-row items-center justify-between px-6 py-3 border-t border-border bg-surface">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={props.isStarred ? "unstar" : "star"}
-        onPress={() => star.mutate({ id: props.articleId, starred: !props.isStarred })}
-        className="px-2 py-1.5"
-      >
-        <Text className={props.isStarred ? "text-accent text-lg" : "text-fg text-lg"}>
-          {props.isStarred ? "★" : "☆"}
-        </Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={props.isArchived ? "unarchive" : "archive"}
-        onPress={onArchiveToggle}
-        className="px-2 py-1.5"
-      >
-        <Text className={props.isArchived ? "text-accent text-sm" : "text-fg text-sm"}>
-          {props.isArchived ? "Unarchive" : "Archive"}
-        </Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="share"
-        onPress={onShare}
-        className="px-2 py-1.5"
-      >
-        <Text className="text-fg text-sm">Share</Text>
-      </Pressable>
-      {props.onOpenPrefs ? (
+    <View className="border-t border-border bg-surface items-center">
+      <View className="flex-row items-center justify-between w-full max-w-[640px] px-6 py-3">
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="reader preferences"
-          onPress={props.onOpenPrefs}
+          accessibilityLabel={props.isStarred ? "unstar" : "star"}
+          onPress={() => star.mutate({ id: props.articleId, starred: !props.isStarred })}
           className="px-2 py-1.5"
         >
-          <Text className="text-fg text-sm">Aa</Text>
+          <Text className={props.isStarred ? "text-accent text-lg" : "text-fg text-lg"}>
+            {props.isStarred ? "★" : "☆"}
+          </Text>
         </Pressable>
-      ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="delete"
-        onPress={onDelete}
-        className="px-2 py-1.5"
-      >
-        {del.isPending ? <ActivityIndicator /> : <Text className="text-muted text-sm">Delete</Text>}
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={props.isArchived ? "unarchive" : "archive"}
+          onPress={onArchiveToggle}
+          className="px-2 py-1.5"
+        >
+          <Text className={props.isArchived ? "text-accent text-sm" : "text-fg text-sm"}>
+            {props.isArchived ? "Unarchive" : "Archive"}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="share"
+          onPress={onShare}
+          className="px-2 py-1.5"
+        >
+          <Text className="text-fg text-sm">Share</Text>
+        </Pressable>
+        {props.onOpenPrefs ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="reader preferences"
+            onPress={props.onOpenPrefs}
+            className="px-2 py-1.5"
+          >
+            <Text className="text-fg text-sm">Aa</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="delete"
+          onPress={onDelete}
+          className="px-2 py-1.5"
+        >
+          {del.isPending ? (
+            <ActivityIndicator />
+          ) : (
+            <Text className="text-muted text-sm">Delete</Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }

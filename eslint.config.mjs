@@ -17,9 +17,9 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "warn",
     },
   },
-  // Metro/Babel configs are CommonJS by Expo convention.
+  // Metro/Babel configs and transformers are CommonJS by Expo convention.
   {
-    files: ["metro.config.js", "babel.config.js"],
+    files: ["metro.config.js", "babel.config.js", "scripts/sql-transformer.js"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

@@ -1,4 +1,5 @@
 import type { DbDriver } from "./driver";
+import { runMigrations } from "./migrations";
 
 let cached: Promise<DbDriver> | null = null;
 
@@ -14,7 +15,7 @@ export async function getDb(): Promise<DbDriver> {
   if (!cached) {
     cached = (async () => {
       const driver = await makeDriver();
-      // Migrations will be wired in Task 3 (runMigrations(driver)).
+      await runMigrations(driver);
       return driver;
     })();
   }

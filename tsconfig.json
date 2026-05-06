@@ -10,6 +10,13 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "expo-env.d.ts", "nativewind-env.d.ts", ".expo/types/**/*.ts"],
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts",
+    "sql.d.ts",
+    ".expo/types/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

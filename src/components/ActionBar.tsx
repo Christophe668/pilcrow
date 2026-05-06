@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, Share, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { showSnackbar } from "./snackbar-store";
 import { useToggleStarred } from "@/hooks/useToggleStarred";
 import { useToggleArchived } from "@/hooks/useToggleArchived";
 import { useDeleteArticle } from "@/hooks/useDeleteArticle";
@@ -23,8 +24,21 @@ export function ActionBar(props: ActionBarProps) {
     await Share.share({ url: props.url, message: props.url, title: props.title ?? props.url });
   };
 
+  const onArchiveToggle = () => {
+    const wasArchived = props.isArchived;
+    archive.mutate({ id: props.articleId, archived: !wasArchived });
+    showSnackbar({
+      message: wasArchived ? "Restored" : "Archived",
+      action: {
+        label: "Undo",
+        onPress: () => archive.mutate({ id: props.articleId, archived: wasArchived }),
+      },
+    });
+  };
+
   const onDelete = async () => {
     await del.mutateAsync(props.articleId);
+    showSnackbar({ message: "Deleted" });
     router.back();
   };
 
@@ -43,7 +57,7 @@ export function ActionBar(props: ActionBarProps) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={props.isArchived ? "unarchive" : "archive"}
-        onPress={() => archive.mutate({ id: props.articleId, archived: !props.isArchived })}
+        onPress={onArchiveToggle}
         className="px-2 py-1.5"
       >
         <Text className={props.isArchived ? "text-accent text-sm" : "text-fg text-sm"}>

@@ -1,6 +1,7 @@
 import { Image, Pressable, Text, View } from "react-native";
 import { Link, type Href } from "expo-router";
 import { TagChip } from "./TagChip";
+import { showSnackbar } from "./snackbar-store";
 import { useToggleStarred } from "@/hooks/useToggleStarred";
 import { useToggleArchived } from "@/hooks/useToggleArchived";
 
@@ -48,6 +49,17 @@ function glyphFor(title: string | null, domain: string | null, url: string): str
 export function ArticleCard(props: ArticleCardProps) {
   const star = useToggleStarred();
   const archive = useToggleArchived();
+  const onArchiveToggle = () => {
+    const wasArchived = props.isArchived;
+    archive.mutate({ id: props.id, archived: !wasArchived });
+    showSnackbar({
+      message: wasArchived ? "Restored" : "Archived",
+      action: {
+        label: "Undo",
+        onPress: () => archive.mutate({ id: props.id, archived: wasArchived }),
+      },
+    });
+  };
   const meta = [props.domain, props.readingTime ? `${props.readingTime} min` : null]
     .filter(Boolean)
     .join(" · ");
@@ -117,7 +129,7 @@ export function ArticleCard(props: ArticleCardProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={props.isArchived ? "unarchive" : "archive"}
-          onPress={() => archive.mutate({ id: props.id, archived: !props.isArchived })}
+          onPress={onArchiveToggle}
           className="w-9 h-9 items-center justify-center rounded-md active:bg-surface-2"
         >
           <Text className={props.isArchived ? "text-accent text-xs" : "text-subtle text-xs"}>

@@ -1,6 +1,6 @@
 import type { ReaderPrefs } from "./prefs";
 import { readerStylesTag } from "./styles";
-import { READER_BRIDGE_JS } from "./bridge";
+import { READER_BRIDGE_FULL_JS } from "./bridge";
 import { rewriteImages } from "@/images/rewrite";
 
 export type BuildReaderArgs = {
@@ -34,7 +34,7 @@ ${readerStylesTag(args.prefs)}
 <article>
 ${rewritten}
 </article>
-<script>${READER_BRIDGE_JS}</script>
+<script>${READER_BRIDGE_FULL_JS}</script>
 </body>
 </html>`;
 

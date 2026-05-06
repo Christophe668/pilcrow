@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/theme/provider";
 import { useAppFonts } from "@/theme/fonts";
 import { hydrateAuth } from "@/auth/state";
 import { useAuth } from "@/hooks/useAuth";
+import { useBootstrapSync } from "@/hooks/useBootstrapSync";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -32,6 +33,8 @@ function AuthGate() {
       router.replace("/(auth)/server");
     }
   }, [auth.status, inAuthGroup, router]);
+
+  useBootstrapSync();
 
   if (auth.status === "unknown" || mismatch) {
     return <View className="flex-1 bg-bg" />;

@@ -84,8 +84,8 @@ export default function AddRoute() {
       </Pressable>
 
       <Text className="text-subtle text-xs mt-4 text-center">
-        The article goes into your unread list. Wallabag fetches the body in the background; you'll
-        see it once sync catches up.
+        The article goes into your unread list. Wallabag fetches the body in the background;
+        you&apos;ll see it once sync catches up.
       </Text>
     </View>
   );

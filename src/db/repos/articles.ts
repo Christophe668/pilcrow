@@ -135,19 +135,50 @@ function toFtsQuery(input: string): string {
   return tokens.join(" ");
 }
 
+async function ftsAvailable(db: DbDriver): Promise<boolean> {
+  const row = await db.get<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = 'articles_fts'",
+  );
+  return row !== null;
+}
+
 export async function searchArticles(db: DbDriver, query: string): Promise<ArticleRow[]> {
   const q = query.trim();
   if (q.length === 0) return [];
-  const ftsQuery = toFtsQuery(q);
-  if (ftsQuery.length === 0) return [];
+
+  if (await ftsAvailable(db)) {
+    const ftsQuery = toFtsQuery(q);
+    if (ftsQuery.length === 0) return [];
+    return db.all<ArticleRow>(
+      `SELECT ${COLS.map((c) => "a." + c).join(", ")}
+       FROM articles_fts f
+       JOIN articles a ON a.id = f.rowid
+       WHERE articles_fts MATCH ?
+       ORDER BY a.updated_at DESC
+       LIMIT 200`,
+      [ftsQuery],
+    );
+  }
+
+  // LIKE fallback for platforms without FTS5 (e.g. expo-sqlite web).
+  // Tokenize the same way and require ALL tokens to appear somewhere in
+  // title/content/url. Slower than FTS but correct.
+  const tokens = q
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return [];
+  const conditions = tokens
+    .map(() => "(COALESCE(title, '') || ' ' || COALESCE(content, '') || ' ' || url) LIKE ?")
+    .join(" AND ");
+  const params = tokens.map((t) => `%${t}%`);
   return db.all<ArticleRow>(
-    `SELECT ${COLS.map((c) => "a." + c).join(", ")}
-     FROM articles_fts f
-     JOIN articles a ON a.id = f.rowid
-     WHERE articles_fts MATCH ?
-     ORDER BY a.updated_at DESC
+    `SELECT ${COLS.join(", ")}
+     FROM articles
+     WHERE ${conditions}
+     ORDER BY updated_at DESC
      LIMIT 200`,
-    [ftsQuery],
+    params,
   );
 }
 

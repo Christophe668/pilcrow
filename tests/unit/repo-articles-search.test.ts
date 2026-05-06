@@ -80,3 +80,18 @@ describe("searchArticles", () => {
     expect(await searchArticles(db, "hello: world!")).toHaveLength(1);
   });
 });
+
+describe("searchArticles LIKE fallback", () => {
+  it("works without articles_fts table", async () => {
+    const db2 = await createBetterSqliteDriver(":memory:");
+    // Apply only migration 001 manually (skip FTS).
+    const sql001 = (await import("../../src/db/migrations/001_initial.sql")).default;
+    await db2.exec(sql001);
+    await upsertArticles(db2, [
+      sample({ id: 1, title: "find me here", content: "body" }),
+      sample({ id: 2, title: "other", content: "no match" }),
+    ]);
+    const r = await searchArticles(db2, "find");
+    expect(r.map((a) => a.id)).toEqual([1]);
+  });
+});

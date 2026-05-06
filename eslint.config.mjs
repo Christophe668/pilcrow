@@ -24,6 +24,13 @@ export default tseslint.config(
       "@typescript-eslint/no-require-imports": "off",
     },
   },
+  // Tailwind config uses `require()` for the NativeWind preset.
+  {
+    files: ["tailwind.config.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   // The recommended `tseslint.configs.X` access pattern is flagged as
   // `import/no-named-as-default-member`; silence it on this config file.
   {

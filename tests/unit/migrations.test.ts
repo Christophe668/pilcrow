@@ -34,7 +34,7 @@ describe("runMigrations", () => {
     const rows = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations ORDER BY version",
     );
-    expect(rows.map((r) => r.version)).toEqual([1, 2]);
+    expect(rows.map((r) => r.version)).toEqual([1, 2, 3]);
   });
 
   it("is idempotent on repeat runs", async () => {
@@ -43,6 +43,6 @@ describe("runMigrations", () => {
     const rows = await db.all<{ version: number }>(
       "SELECT version FROM schema_migrations ORDER BY version",
     );
-    expect(rows.map((r) => r.version)).toEqual([1, 2]);
+    expect(rows.map((r) => r.version)).toEqual([1, 2, 3]);
   });
 });

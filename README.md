@@ -21,7 +21,18 @@ Phase 2 (Data layer) complete:
 - TanStack Query hooks: useArticles, useArticle, useTags, useAnnotations, useSyncStatus, useSyncNow
 - Sign-out wipes SQLite content
 
-Library UI, reader, and share targets arrive in later phases.
+Phase 3 (Library UI) complete:
+
+- Filter routes: Unread / Starred / Archive / All / Tag
+- Full-text search via SQLite FTS5
+- Virtualized article list with pull-to-refresh
+- Optimistic mutations: toggle starred / archive, delete
+- Auto initial sync after sign-in + incremental sync on app foreground
+- Phone bottom tab bar; tablet/desktop rail with filters + tag list
+- Settings: account info, last-sync time, manual Sync now
+- Article placeholder route (reader arrives in Phase 4)
+
+Reader, share targets, and release pipeline arrive in later phases.
 
 ## Develop
 

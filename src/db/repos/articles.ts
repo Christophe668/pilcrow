@@ -150,3 +150,16 @@ export async function searchArticles(db: DbDriver, query: string): Promise<Artic
     [ftsQuery],
   );
 }
+
+export async function articlesByTagSlug(db: DbDriver, slug: string): Promise<ArticleRow[]> {
+  return db.all<ArticleRow>(
+    `SELECT ${COLS.map((c) => "a." + c).join(", ")}
+     FROM articles a
+     JOIN article_tags at ON at.article_id = a.id
+     JOIN tags t ON t.id = at.tag_id
+     WHERE t.slug = ?
+     ORDER BY a.updated_at DESC
+     LIMIT 200`,
+    [slug],
+  );
+}

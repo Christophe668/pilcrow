@@ -1,4 +1,4 @@
-import { secureGet, secureSet } from "@/auth/storage";
+import { secureGet } from "@/auth/storage";
 import { ensureFreshToken } from "@/auth/tokens";
 import { kvGet } from "@/lib/async-storage";
 
@@ -63,12 +63,11 @@ export async function request<T>(args: RequestArgs): Promise<T> {
   });
   let res = await send(args, token);
   if (res.status === 401) {
-    // Force refresh by setting stored expiry to 0; ensureFreshToken refreshes.
-    await secureSet("token_expires_at", "0");
     token = await ensureFreshToken({
       serverUrl: args.serverUrl,
       clientId,
       clientSecret,
+      force: true,
     });
     res = await send(args, token);
   }

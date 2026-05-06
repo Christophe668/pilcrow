@@ -1,4 +1,4 @@
-import { kvSet, kvGet, kvClear } from "@/lib/async-storage";
+import { kvSet, kvGet, kvRemove } from "@/lib/async-storage";
 import { secureSet, secureGet } from "@/auth/storage";
 import { applyTokenBundle, clearTokens } from "@/auth/tokens";
 import type { TokenBundle } from "@/api/types";
@@ -58,6 +58,7 @@ export async function signIn(args: {
 
 export async function signOut(): Promise<void> {
   await clearTokens();
-  await kvClear();
+  await kvRemove("server_url");
+  await kvRemove("last_user_id");
   authStore.set({ status: "unauthenticated", serverUrl: null });
 }

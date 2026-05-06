@@ -76,6 +76,24 @@ describe("token state machine", () => {
     expect(refreshSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("force=true triggers refresh even when token is fresh", async () => {
+    await applyTokenBundle({
+      access_token: "at-1",
+      refresh_token: "rt-1",
+      expires_in: 3600,
+      token_type: "bearer",
+    });
+    refreshSpy.mockClear();
+    const after = await ensureFreshToken({
+      serverUrl: "https://wb.test",
+      clientId: "cid",
+      clientSecret: "cs",
+      force: true,
+    });
+    expect(after).toBe("at-new");
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("clears persistent token state", async () => {
     await applyTokenBundle({
       access_token: "at",

@@ -16,17 +16,26 @@ function AuthGate() {
   const auth = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const inAuthGroup = segments[0] === "(auth)";
+  const mismatch =
+    auth.status === "authenticated"
+      ? inAuthGroup
+      : auth.status === "unauthenticated"
+        ? !inAuthGroup
+        : false;
+
   useEffect(() => {
     if (auth.status === "unknown") return;
-    const inAuthGroup = segments[0] === "(auth)";
     if (auth.status === "authenticated" && inAuthGroup) {
       router.replace("/(app)");
     } else if (auth.status === "unauthenticated" && !inAuthGroup) {
       router.replace("/(auth)/server");
     }
-  }, [auth.status, segments, router]);
+  }, [auth.status, inAuthGroup, router]);
 
-  if (auth.status === "unknown") return <View className="flex-1 bg-bg" />;
+  if (auth.status === "unknown" || mismatch) {
+    return <View className="flex-1 bg-bg" />;
+  }
   return <Slot />;
 }
 

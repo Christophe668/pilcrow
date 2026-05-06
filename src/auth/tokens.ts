@@ -31,10 +31,12 @@ export async function ensureFreshToken(args: {
   serverUrl: string;
   clientId: string;
   clientSecret: string;
+  force?: boolean;
 }): Promise<string> {
   const access = await getAccessToken();
   const expiresAt = await readExpiresAt();
-  const needsRefresh = !access || expiresAt === null || expiresAt - Date.now() < REFRESH_LEEWAY_MS;
+  const needsRefresh =
+    args.force || !access || expiresAt === null || expiresAt - Date.now() < REFRESH_LEEWAY_MS;
   if (!needsRefresh) return access!;
 
   if (!inFlightRefresh) {

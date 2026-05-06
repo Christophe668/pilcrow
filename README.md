@@ -11,7 +11,17 @@ Phase 1 (Foundation) complete:
 - Sign-in / sign-out
 - Theming (light / dark / sepia / auto)
 
-Library, reader, offline sync, and share targets arrive in later phases.
+Phase 2 (Data layer) complete:
+
+- SQLite schema + migration runner
+- Articles / tags / annotations / outbox / sync-state repos
+- Wallabag entries / tags / annotations API bindings
+- Sync engine: initial sync, incremental sync via `since` cursor
+- Outbox drainer with exponential backoff
+- TanStack Query hooks: useArticles, useArticle, useTags, useAnnotations, useSyncStatus, useSyncNow
+- Sign-out wipes SQLite content
+
+Library UI, reader, and share targets arrive in later phases.
 
 ## Develop
 

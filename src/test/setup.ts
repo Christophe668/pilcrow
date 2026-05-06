@@ -27,6 +27,18 @@ vi.hoisted(() => {
 
 vi.mock("nativewind", () => ({ vars: (obj: unknown) => obj }));
 
+// Tests exercise the native (SecureStore) code path of `src/auth/storage.ts`.
+// On real web `Platform.OS === "web"` makes the wrapper read/write
+// `localStorage`; under Vitest we mock `expo-secure-store` directly, so we
+// also need `Platform.OS` to NOT be "web" for the SecureStore branch to run.
+vi.mock("react-native", async () => {
+  const actual = await vi.importActual<typeof import("react-native")>("react-native");
+  return {
+    ...actual,
+    Platform: { ...actual.Platform, OS: "ios" },
+  };
+});
+
 // `react-native-web` translates RN host components into plain DOM elements
 // (`View` -> `div`, `Text` -> `div`, `TextInput` -> `input`, `Pressable` -> `button`).
 // `@testing-library/react-native`'s default host-component detection only

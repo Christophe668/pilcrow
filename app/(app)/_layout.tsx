@@ -1,6 +1,7 @@
 import { Slot, useSegments } from "expo-router";
 import { View } from "react-native";
 import { TabBar } from "@/components/TabBar";
+import { Snackbar } from "@/components/Snackbar";
 import { useBreakpoint } from "@/hooks/useResponsive";
 
 export default function AppLayout() {
@@ -14,6 +15,7 @@ export default function AppLayout() {
         <Slot />
       </View>
       {showTabBar ? <TabBar /> : null}
+      <Snackbar />
     </View>
   );
 }

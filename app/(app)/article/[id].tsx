@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFullArticle } from "@/hooks/useFullArticle";
 import { useReaderPrefs } from "@/hooks/useReaderPrefs";
@@ -127,28 +127,42 @@ export default function ArticleRoute() {
     .filter(Boolean)
     .join(" · ");
   const progressPct = Math.round((article.data.scroll_position ?? 0) * 100);
+  const articleUrl = article.data.url;
+  const onOpenOriginal = async () => {
+    await Linking.openURL(articleUrl).catch(() => undefined);
+  };
 
   return (
     <View className="flex-1 bg-bg">
-      <View className="px-6 pt-12 pb-3 border-b border-border bg-bg flex-row items-center gap-3">
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          className="px-2 py-1.5 rounded-md"
-        >
-          <Text className="text-muted text-sm">← Back</Text>
-        </Pressable>
-        <View className="flex-1 items-center">
-          {meta.length > 0 ? (
-            <Text className="text-muted text-xs" numberOfLines={1}>
-              {meta}
+      <View className="bg-bg">
+        <View className="px-6 pt-12 pb-3 flex-row items-center gap-3">
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            className="px-2 py-1.5 rounded-md"
+          >
+            <Text className="text-muted text-sm">← Back</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="open original article in browser"
+            onPress={onOpenOriginal}
+            className="flex-1 items-center px-3"
+          >
+            <Text className="text-fg text-sm underline" numberOfLines={1}>
+              {articleUrl}
             </Text>
-          ) : null}
-          <View className="h-[2px] w-[80px] bg-border rounded-full mt-1.5 overflow-hidden">
-            <View className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
-          </View>
+            {meta.length > 0 ? (
+              <Text className="text-subtle text-xs mt-0.5" numberOfLines={1}>
+                {meta}
+              </Text>
+            ) : null}
+          </Pressable>
+          <View className="w-[60px]" />
         </View>
-        <View className="w-[60px]" />
+        <View className="h-[2px] bg-border w-full overflow-hidden">
+          <View className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
+        </View>
       </View>
       <View className="flex-1">
         {built ? (

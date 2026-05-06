@@ -27,6 +27,64 @@ vi.hoisted(() => {
 
 vi.mock("nativewind", () => ({ vars: (obj: unknown) => obj }));
 
+// `react-native-web` translates RN host components into plain DOM elements
+// (`View` -> `div`, `Text` -> `div`, `TextInput` -> `input`, `Pressable` -> `button`).
+// `@testing-library/react-native`'s default host-component detection only
+// recognizes the RN names ("Text", "TextInput", etc.), so RNTL queries return
+// nothing on our jsdom-rendered tree. Patch the helper module so the queries
+// detect the rn-web DOM equivalents instead.
+//
+// We distinguish `View` and `Text` (both render to `div`) by their classNames:
+// rn-web emits `css-text-…` for Text and `css-view-…` / `css-textinput-…`
+// for the others.
+{
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const hostNames = require("@testing-library/react-native/build/helpers/host-component-names") as {
+    isHostText: (e: unknown) => boolean;
+    isHostTextInput: (e: unknown) => boolean;
+    isHostImage: (e: unknown) => boolean;
+    isHostSwitch: (e: unknown) => boolean;
+    isHostScrollView: (e: unknown) => boolean;
+    isHostModal: (e: unknown) => boolean;
+  };
+  const asNode = (e: unknown) =>
+    e as { type?: unknown; props?: { className?: unknown } } | null | undefined;
+  const cls = (e: unknown) => {
+    const c = asNode(e)?.props?.className;
+    return typeof c === "string" ? c : "";
+  };
+  hostNames.isHostText = (e: unknown) => {
+    const n = asNode(e);
+    return typeof n?.type === "string" && n.type === "div" && /\bcss-text-/.test(cls(e));
+  };
+  hostNames.isHostTextInput = (e: unknown) => {
+    const n = asNode(e);
+    return (
+      typeof n?.type === "string" &&
+      (n.type === "input" || n.type === "textarea") &&
+      /\bcss-textinput-/.test(cls(e))
+    );
+  };
+  hostNames.isHostImage = (e: unknown) => {
+    const n = asNode(e);
+    return typeof n?.type === "string" && (n.type === "img" || n.type === "picture");
+  };
+
+  // `isAccessibilityElement` short-circuits on `props.accessible`, but rn-web
+  // doesn't set that prop. Treat any element with an explicit ARIA `role` (or
+  // RN `accessibilityRole`) as accessible so `getByRole` queries match.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const accessibility = require("@testing-library/react-native/build/helpers/accessibility") as {
+    isAccessibilityElement: (e: unknown) => boolean;
+  };
+  const origIsAccessible = accessibility.isAccessibilityElement;
+  accessibility.isAccessibilityElement = (e: unknown) => {
+    const el = e as { props?: { role?: unknown; accessibilityRole?: unknown } } | null;
+    if (el?.props?.role || el?.props?.accessibilityRole) return true;
+    return origIsAccessible(e);
+  };
+}
+
 const { cleanup } = await import("@testing-library/react-native");
 const { server } = await import("./msw-server");
 

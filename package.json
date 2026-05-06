@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.11",
+    "@hookform/resolvers": "^5.2.2",
     "@react-native-async-storage/async-storage": "^3.0.2",
     "@tanstack/react-query": "^5.100.9",
     "expo": "~55.0.23",
@@ -28,13 +29,15 @@
     "expo-system-ui": "^55.0.17",
     "nativewind": "^4.2.3",
     "react": "19.2.5",
+    "react-hook-form": "^7.75.0",
     "react-native": "0.85.3",
     "react-native-css-interop": "^0.2.3",
     "react-native-gesture-handler": "^2.31.2",
     "react-native-reanimated": "^4.3.0",
     "react-native-safe-area-context": "^5.7.0",
     "react-native-screens": "^4.24.0",
-    "react-native-web": "^0.21.2"
+    "react-native-web": "^0.21.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

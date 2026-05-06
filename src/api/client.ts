@@ -1,5 +1,6 @@
 import { secureGet, secureSet } from "@/auth/storage";
 import { ensureFreshToken } from "@/auth/tokens";
+import { kvGet } from "@/lib/async-storage";
 
 export type RequestArgs = {
   serverUrl: string;
@@ -76,4 +77,10 @@ export async function request<T>(args: RequestArgs): Promise<T> {
     throw new ApiError(res.status, args.path, text);
   }
   return (await res.json()) as T;
+}
+
+export async function authedRequest<T>(args: Omit<RequestArgs, "serverUrl">): Promise<T> {
+  const serverUrl = await kvGet("server_url");
+  if (!serverUrl) throw new Error("No server URL — sign in first");
+  return request<T>({ ...args, serverUrl });
 }

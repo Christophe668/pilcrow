@@ -9,6 +9,15 @@ vi.mock("expo-secure-store", () => ({
   deleteItemAsync: vi.fn(async (k: string) => void secure.delete(k)),
 }));
 
+const asyncMem = new Map<string, string>();
+vi.mock("@react-native-async-storage/async-storage", () => ({
+  default: {
+    getItem: vi.fn(async (k: string) => asyncMem.get(k) ?? null),
+    setItem: vi.fn(async (k: string, v: string) => void asyncMem.set(k, v)),
+    removeItem: vi.fn(async (k: string) => void asyncMem.delete(k)),
+  },
+}));
+
 import { request } from "@/api/client";
 import { applyTokenBundle } from "@/auth/tokens";
 

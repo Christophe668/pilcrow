@@ -24,3 +24,24 @@ export function isLikelyServerUrl(input: string): boolean {
     return false;
   }
 }
+
+const HTTP_URL_RE = /\bhttps?:\/\/[^\s<>"']+/i;
+
+export function extractCandidateUrl(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (trimmed.length === 0) return null;
+
+  const direct = HTTP_URL_RE.exec(trimmed);
+  if (!direct) return null;
+  const candidate = direct[0];
+
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.hostname) return null;
+    return candidate;
+  } catch {
+    return null;
+  }
+}

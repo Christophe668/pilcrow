@@ -125,3 +125,28 @@ export async function clearPendingOp(db: DbDriver, id: number): Promise<void> {
     [id],
   );
 }
+
+function toFtsQuery(input: string): string {
+  const tokens = input
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => `"${t}"`);
+  return tokens.join(" ");
+}
+
+export async function searchArticles(db: DbDriver, query: string): Promise<ArticleRow[]> {
+  const q = query.trim();
+  if (q.length === 0) return [];
+  const ftsQuery = toFtsQuery(q);
+  if (ftsQuery.length === 0) return [];
+  return db.all<ArticleRow>(
+    `SELECT ${COLS.map((c) => "a." + c).join(", ")}
+     FROM articles_fts f
+     JOIN articles a ON a.id = f.rowid
+     WHERE articles_fts MATCH ?
+     ORDER BY a.updated_at DESC
+     LIMIT 200`,
+    [ftsQuery],
+  );
+}

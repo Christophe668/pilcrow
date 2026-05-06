@@ -19,7 +19,11 @@ export default function StarredRoute() {
   };
   return (
     <View className="flex-1">
-      <LibraryHeader title="Starred" {...(articles.data ? { count: articles.data.length } : {})} />
+      <LibraryHeader
+        title="Starred"
+        activeFilter="starred"
+        {...(articles.data ? { count: articles.data.length } : {})}
+      />
       <ArticleList
         articles={articles.data ?? []}
         loading={articles.isLoading}

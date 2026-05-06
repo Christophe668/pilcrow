@@ -24,6 +24,7 @@ export default function TagRoute() {
     <View className="flex-1">
       <LibraryHeader
         title={`#${slug}`}
+        activeFilter="tag"
         {...(articles.data ? { count: articles.data.length } : {})}
       />
       <ArticleList

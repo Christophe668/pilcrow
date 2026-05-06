@@ -19,7 +19,11 @@ export default function UnreadRoute() {
   };
   return (
     <View className="flex-1">
-      <LibraryHeader title="Unread" {...(articles.data ? { count: articles.data.length } : {})} />
+      <LibraryHeader
+        title="Unread"
+        activeFilter="unread"
+        {...(articles.data ? { count: articles.data.length } : {})}
+      />
       <ArticleList
         articles={articles.data ?? []}
         loading={articles.isLoading}

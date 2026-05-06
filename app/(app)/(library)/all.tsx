@@ -19,7 +19,11 @@ export default function AllRoute() {
   };
   return (
     <View className="flex-1">
-      <LibraryHeader title="All" {...(articles.data ? { count: articles.data.length } : {})} />
+      <LibraryHeader
+        title="All"
+        activeFilter="all"
+        {...(articles.data ? { count: articles.data.length } : {})}
+      />
       <ArticleList
         articles={articles.data ?? []}
         loading={articles.isLoading}

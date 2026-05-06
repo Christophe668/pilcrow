@@ -19,7 +19,11 @@ export default function ArchiveRoute() {
   };
   return (
     <View className="flex-1">
-      <LibraryHeader title="Archive" {...(articles.data ? { count: articles.data.length } : {})} />
+      <LibraryHeader
+        title="Archive"
+        activeFilter="archive"
+        {...(articles.data ? { count: articles.data.length } : {})}
+      />
       <ArticleList
         articles={articles.data ?? []}
         loading={articles.isLoading}

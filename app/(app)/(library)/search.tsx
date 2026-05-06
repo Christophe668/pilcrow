@@ -20,7 +20,11 @@ export default function SearchRoute() {
   };
   return (
     <View className="flex-1">
-      <LibraryHeader title="Search" {...(search.data ? { count: search.data.length } : {})} />
+      <LibraryHeader
+        title="Search"
+        activeFilter="search"
+        {...(search.data ? { count: search.data.length } : {})}
+      />
       <View className="px-6 py-3 border-b border-border">
         <TextInput
           value={query}

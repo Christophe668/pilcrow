@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wallabag — your private read-later library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:oklch(98% 0.006 70);
+    --surface:oklch(100% 0 0);
+    --surface-2:oklch(96.5% 0.008 70);
+    --fg:oklch(20% 0.018 60);
+    --muted:oklch(46% 0.014 60);
+    --subtle:oklch(62% 0.012 60);
+    --border:oklch(91% 0.010 70);
+    --border-strong:oklch(82% 0.012 70);
+    --accent:oklch(53% 0.19 30);
+    --accent-ink:oklch(38% 0.18 30);
+    --accent-soft:oklch(94.5% 0.035 30);
+    --teal:oklch(56% 0.09 175);
+    --highlight:oklch(91% 0.10 85);
+    --font-display:'Newsreader','Iowan Old Style','Charter',Georgia,serif;
+    --font-body:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+    --font-mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,monospace;
+    --radius:10px;
+    --reader-width:680px;
+  }
+  :root.dark{
+    --bg:oklch(16% 0.014 60);
+    --surface:oklch(20% 0.014 60);
+    --surface-2:oklch(23% 0.014 60);
+    --fg:oklch(95% 0.006 70);
+    --muted:oklch(70% 0.012 60);
+    --subtle:oklch(55% 0.012 60);
+    --border:oklch(28% 0.014 60);
+    --border-strong:oklch(38% 0.016 60);
+    --accent:oklch(70% 0.17 32);
+    --accent-ink:oklch(82% 0.12 32);
+    --accent-soft:oklch(28% 0.08 30);
+    --teal:oklch(72% 0.10 175);
+    --highlight:oklch(45% 0.10 85);
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  html{background:var(--bg)}
+  body{font-family:var(--font-body);color:var(--fg);background:var(--bg);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;min-height:100vh}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+  ::selection{background:var(--highlight);color:var(--fg)}
+
+  body[data-view="library"] .reader-shell{display:none}
+  body[data-view="reader"] .lib-shell{display:none}
+
+  /* masthead */
+  .masthead{position:sticky;top:0;z-index:30;display:grid;grid-template-columns:240px 1fr auto;align-items:center;gap:24px;padding:14px 28px;background:color-mix(in oklch, var(--bg) 80%, transparent);backdrop-filter:saturate(160%) blur(12px);-webkit-backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--border)}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .mark{width:26px;height:26px;display:grid;place-items:center;color:var(--accent)}
+  .brand .word{font-family:var(--font-display);font-weight:500;font-size:22px;letter-spacing:-0.015em}
+  .brand .word em{font-style:italic;color:var(--accent);font-weight:500}
+  .search{position:relative;max-width:560px;width:100%}
+  .search input{width:100%;padding:9px 14px 9px 38px;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);border-radius:var(--radius);font:inherit}
+  .search input::placeholder{color:var(--subtle)}
+  .search input:focus{outline:none;border-color:var(--border-strong);background:var(--surface)}
+  .search .icn{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--subtle)}
+  .search .kbd{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:11px;color:var(--subtle);border:1px solid var(--border);background:var(--surface);padding:2px 6px;border-radius:4px}
+  .top-actions{display:flex;gap:10px;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius);font-weight:500;font-size:13.5px}
+  .btn:hover{background:var(--surface-2)}
+  .btn-primary{background:var(--accent);color:oklch(99% 0.01 60);border-color:var(--accent)}
+  .btn-primary:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
+  .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),oklch(60% 0.16 50));color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600;border:1px solid var(--border)}
+
+  /* layout */
+  .lib-grid{display:grid;grid-template-columns:240px minmax(0,1fr) 280px;max-width:1480px;margin:0 auto;align-items:start}
+
+  /* left rail */
+  .rail{position:sticky;top:67px;padding:28px 16px 40px 28px;height:calc(100vh - 67px);overflow-y:auto}
+  .rail-section{margin-bottom:26px}
+  .rail-label{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);margin-bottom:8px;padding:0 10px}
+  .rail-list{list-style:none;padding:0;margin:0}
+  .rail-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--fg);font-size:14px;cursor:pointer;user-select:none}
+  .rail-item:hover{background:var(--surface-2)}
+  .rail-item.is-active{background:var(--accent-soft);color:var(--accent-ink);font-weight:500}
+  :root.dark .rail-item.is-active{color:var(--accent)}
+  .rail-item .ic{width:16px;height:16px;flex:0 0 16px;opacity:0.85}
+  .rail-item .count{margin-inline-start:auto;font-variant-numeric:tabular-nums;font-size:12px;color:var(--subtle)}
+  .rail-item.is-active .count{color:var(--accent-ink);opacity:0.9}
+  :root.dark .rail-item.is-active .count{color:var(--accent)}
+  .tag-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);padding:4px 9px;border:1px solid var(--border);border-radius:999px;background:var(--surface);margin:0 4px 6px 0}
+  .tag-chip .dot{width:6px;height:6px;border-radius:50%}
+
+  /* list pane */
+  .list-pane{border-inline-start:1px solid var(--border);border-inline-end:1px solid var(--border);min-height:calc(100vh - 67px)}
+  .list-head{display:flex;flex-direction:column;gap:14px;padding:36px 36px 18px;border-bottom:1px solid var(--border)}
+  .list-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:24px}
+  .list-title{font-family:var(--font-display);font-size:34px;font-weight:500;letter-spacing:-0.02em;line-height:1.05}
+  .list-title-meta{color:var(--muted);font-size:13.5px;font-variant-numeric:tabular-nums}
+  .list-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:13px;color:var(--muted);border:1px solid transparent;border-radius:999px;cursor:pointer}
+  .pill:hover{background:var(--surface-2);color:var(--fg)}
+  .pill.is-on{color:var(--fg);border-color:var(--border);background:var(--surface)}
+  .pill .num{font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--subtle)}
+  .sort-divider{flex:1}
+  .sort{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+  .sort select{background:transparent;border:0;color:var(--fg);font:inherit;font-size:13px;cursor:pointer}
+
+  /* article rows */
+  .list{display:flex;flex-direction:column}
+  .row{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:22px;padding:22px 36px;border-bottom:1px solid var(--border);cursor:pointer;position:relative;transition:background 120ms ease}
+  .row:hover{background:color-mix(in oklch, var(--surface-2) 60%, transparent)}
+  .row::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:2px;background:var(--accent);opacity:0;transition:opacity 120ms ease}
+  .row.is-unread::before{opacity:1}
+  .thumb{width:64px;height:64px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);overflow:hidden;position:relative;flex:0 0 64px}
+  .thumb::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 0% 0%, color-mix(in oklch, var(--th, var(--accent)) 28%, transparent), transparent 60%),linear-gradient(135deg, color-mix(in oklch, var(--th, var(--accent)) 14%, var(--surface)) 0%, var(--surface-2) 100%)}
+  .thumb .glyph{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--font-display);font-size:26px;font-weight:500;color:color-mix(in oklch, var(--th, var(--accent)) 80%, var(--fg));z-index:1;letter-spacing:-0.01em}
+  .row-body{min-width:0}
+  .row-meta{display:flex;align-items:center;gap:10px;color:var(--subtle);font-size:12.5px;margin-bottom:4px}
+  .row-meta .domain{color:var(--muted);font-weight:500}
+  .row-meta .sep{color:var(--border-strong)}
+  .row-meta .read-time{font-variant-numeric:tabular-nums}
+  .row-meta .progress{color:var(--teal);font-variant-numeric:tabular-nums}
+  .row-title{font-family:var(--font-display);font-size:19px;font-weight:500;line-height:1.25;letter-spacing:-0.015em;color:var(--fg);margin:0 0 6px;text-wrap:balance}
+  .row.is-archived .row-title{color:var(--muted)}
+  .row-excerpt{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-wrap:pretty}
+  .row-tags{display:flex;flex-wrap:wrap;gap:6px}
+  .row-tags .tag{font-size:11.5px;padding:2px 8px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:999px}
+  .row-actions{display:flex;align-items:flex-start;gap:4px;opacity:0;transition:opacity 120ms ease}
+  .row:hover .row-actions{opacity:1}
+  .row-actions .ax{width:30px;height:30px;border-radius:6px;display:grid;place-items:center;color:var(--subtle)}
+  .row-actions .ax:hover{background:var(--surface-2);color:var(--fg)}
+  .row-actions .ax.is-on{color:var(--accent)}
+  .progress-bar{height:2px;width:60px;background:var(--border);border-radius:2px;overflow:hidden;display:inline-block;vertical-align:middle;margin-inline-end:6px}
+  .progress-bar > span{display:block;height:100%;background:var(--teal)}
+
+  /* right context */
+  .context{position:sticky;top:67px;height:calc(100vh - 67px);overflow-y:auto;padding:36px 28px 40px 24px;display:flex;flex-direction:column;gap:24px}
+  .ctx-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+  .ctx-card h3{margin:0 0 14px;font-size:12.5px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);font-weight:500}
+  .ctx-stat{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px}
+  .ctx-stat:last-child{margin-bottom:0}
+  .ctx-stat .lbl{font-size:13.5px;color:var(--muted)}
+  .ctx-stat .val{font-family:var(--font-display);font-size:22px;font-weight:500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums}
+  .resume-card{padding:0;overflow:hidden;cursor:pointer}
+  .resume-thumb{height:100px;background:radial-gradient(120% 80% at 0% 0%, color-mix(in oklch, var(--accent) 36%, transparent), transparent 60%),linear-gradient(135deg, color-mix(in oklch, var(--accent) 18%, var(--surface)) 0%, var(--surface-2) 100%);border-bottom:1px solid var(--border);position:relative}
+  .resume-progress{position:absolute;inset:auto 0 0 0;height:3px;background:rgba(0,0,0,0.05)}
+  .resume-progress > span{display:block;height:100%;background:var(--accent)}
+  .resume-body{padding:14px 16px 16px}
+  .resume-eyebrow{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);margin-bottom:6px}
+  .resume-title{font-family:var(--font-display);font-size:16px;font-weight:500;line-height:1.3;letter-spacing:-0.01em;margin:0 0 8px}
+  .resume-meta{color:var(--subtle);font-size:12px;font-variant-numeric:tabular-nums}
+
+  /* reader */
+  .reader-bar{position:sticky;top:0;z-index:30;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;padding:12px 28px;background:color-mix(in oklch, var(--bg) 82%, transparent);backdrop-filter:saturate(160%) blur(12px);-webkit-backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--border)}
+  .reader-bar .back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13.5px;padding:6px 10px;border-radius:6px}
+  .reader-bar .back:hover{background:var(--surface-2);color:var(--fg)}
+  .reader-bar .title-meta{text-align:center;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .reader-bar .progress-track{display:inline-block;width:80px;height:2px;background:var(--border);margin:0 8px 2px;vertical-align:middle;border-radius:2px;overflow:hidden}
+  .reader-bar .progress-track > span{display:block;height:100%;background:var(--accent);width:0%;transition:width 100ms linear}
+  .reader-bar .ax-row{display:flex;align-items:center;gap:4px}
+  .reader-bar .ax{width:34px;height:34px;display:grid;place-items:center;border-radius:6px;color:var(--muted)}
+  .reader-bar .ax:hover{background:var(--surface-2);color:var(--fg)}
+
+  .article{max-width:var(--reader-width);margin:0 auto;padding:48px 24px 120px}
+  .article-eyebrow{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent-ink);margin-bottom:16px}
+  :root.dark .article-eyebrow{color:var(--accent)}
+  .article-title{font-family:var(--font-display);font-size:48px;font-weight:500;line-height:1.05;letter-spacing:-0.025em;margin:0 0 18px;text-wrap:balance}
+  .article-deck{font-family:var(--font-display);font-style:italic;font-size:22px;line-height:1.4;color:var(--muted);margin:0 0 32px;text-wrap:pretty}
+  .byline{display:flex;align-items:center;gap:12px;padding:16px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:36px}
+  .byline-ava{width:38px;height:38px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:grid;place-items:center;font-family:var(--font-display);font-weight:500;font-size:14px;color:var(--muted)}
+  .byline-text{flex:1;min-width:0}
+  .byline-author{font-weight:500;font-size:14px}
+  .byline-meta{color:var(--subtle);font-size:12.5px;font-variant-numeric:tabular-nums}
+  .hero-figure{height:340px;border-radius:var(--radius);background:linear-gradient(135deg,oklch(35% 0.06 30),oklch(22% 0.04 30));margin-bottom:14px}
+  .hero-caption{font-size:12.5px;color:var(--subtle);font-style:italic;margin-bottom:36px}
+  .article-body{font-family:var(--font-display);font-size:19px;line-height:1.65;color:var(--fg)}
+  .article-body p{margin:0 0 1.2em;text-wrap:pretty}
+  .article-body p:first-of-type::first-letter{font-size:64px;float:left;line-height:0.92;padding:6px 8px 0 0;font-weight:500;color:var(--accent)}
+  .article-body mark.hl{background:var(--highlight);padding:0 2px;color:var(--fg)}
+  .article-body .pullquote{font-family:var(--font-display);font-size:28px;font-weight:500;line-height:1.25;font-style:italic;letter-spacing:-0.01em;color:var(--fg);margin:32px 0;padding-inline-start:24px;border-inline-start:2px solid var(--accent);text-wrap:balance}
+  .article-body blockquote{font-style:italic;color:var(--muted);margin:24px 0;padding-inline-start:18px;border-inline-start:1px solid var(--border)}
+  .article-body figure{margin:32px 0}
+  .article-body figure .fig{height:240px;border-radius:8px;background:linear-gradient(135deg,oklch(80% 0.04 175),oklch(70% 0.06 30));margin-bottom:8px}
+  .article-body figure figcaption{font-size:12.5px;color:var(--subtle);font-style:italic;font-family:var(--font-body)}
+  .article-body ol{padding-inline-start:24px}
+  .article-body ol li{margin-bottom:8px}
+
+  .reader-body{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:48px;max-width:1100px;margin:0 auto;padding:0 24px}
+  .toc{position:sticky;top:78px;align-self:start;padding:48px 0;font-size:13px}
+  .toc h4{margin:0 0 12px;font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);font-weight:500}
+  .toc ol{list-style:none;padding:0;margin:0;counter-reset:toc}
+  .toc li{counter-increment:toc;position:relative;padding:6px 0 6px 28px;color:var(--muted);cursor:pointer}
+  .toc li::before{content:counter(toc, decimal-leading-zero);position:absolute;left:0;top:6px;font-family:var(--font-mono);font-size:11px;color:var(--subtle)}
+  .toc li:hover{color:var(--fg)}
+  .toc li.is-active{color:var(--accent-ink)}
+  :root.dark .toc li.is-active{color:var(--accent)}
+
+  /* responsive */
+  /* 1180–1024: keep 3-column sticky layout, just narrower */
+  @media (max-width:1180px){
+    .lib-grid{grid-template-columns:212px minmax(0,1fr) 244px}
+    .rail{padding:24px 12px 32px 20px}
+    .context{padding:28px 20px 32px 18px;gap:18px}
+    .ctx-card{padding:14px}
+    .resume-card{padding:0}
+    .resume-thumb{height:80px}
+    .list-head{padding:30px 28px 16px}
+    .row{padding:20px 28px}
+    .reader-body{grid-template-columns:minmax(0,1fr)}
+    .toc{display:none}
+  }
+  /* ≤1024: drop the right context column to a full-width strip below */
+  @media (max-width:1024px){
+    .lib-grid{grid-template-columns:212px minmax(0,1fr)}
+    .context{grid-column:1 / -1;grid-row:2;position:static;height:auto;padding:18px 28px;display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:14px;border-top:1px solid var(--border);background:var(--surface-2)}
+    .context .ctx-card{margin:0}
+    .resume-thumb{height:72px}
+  }
+  @media (max-width:880px){
+    .lib-grid{grid-template-columns:1fr}
+    .context{grid-row:auto;padding:16px 20px;grid-template-columns:none;display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
+    .context .ctx-card{flex:0 0 78%;scroll-snap-align:start;min-width:240px}
+    .rail{position:static;height:auto;padding:0;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:0;overflow:visible;white-space:normal}
+    .rail-section{margin-bottom:0;display:flex;align-items:center;gap:10px;padding:8px 20px;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;scrollbar-width:none}
+    .rail-section::-webkit-scrollbar{display:none}
+    .rail-section + .rail-section{border-top:1px solid var(--border)}
+    .rail-label{display:inline-flex;flex:0 0 auto;margin:0;padding:0;color:var(--subtle)}
+    .rail-list{display:inline-flex;gap:6px;padding:0;margin:0}
+    .rail-item{flex:0 0 auto;border:1px solid var(--border);background:var(--surface);font-size:13px;padding:6px 12px;border-radius:999px}
+    .rail-item.is-active{border-color:var(--accent)}
+    .rail-item .count{margin-inline-start:6px}
+    .rail-section > div{display:inline-flex;gap:6px;padding:0;margin:0}
+    .rail-section .tag-chip{flex:0 0 auto;margin:0}
+    .list-pane{border:0}
+    .list-head{padding:24px 20px 14px}
+    .row{padding:18px 20px;grid-template-columns:48px minmax(0,1fr) auto;gap:12px}
+    .row-actions{display:flex;flex-direction:column;gap:2px;opacity:1}
+    .row-actions .ax{width:30px;height:30px}
+    .thumb{width:48px;height:48px;flex:0 0 48px}
+    .thumb .glyph{font-size:20px}
+    .article{padding:32px 20px 96px}
+    .article-title{font-size:36px}
+    .article-deck{font-size:18px}
+    .article-body{font-size:17px}
+    .reader-bar{padding:10px 20px}
+    .masthead{grid-template-columns:auto 1fr;grid-template-areas:"brand actions" "search search";row-gap:10px;column-gap:12px;padding:12px 20px}
+    .brand{grid-area:brand}
+    .top-actions{grid-area:actions;justify-self:end}
+    .search{grid-area:search;max-width:none}
+    .search .kbd{display:none}
+  }
+  @media (max-width:480px){
+    .article-title{font-size:30px}
+    .top-actions .btn:not(.btn-icon){display:none}
+    .row{grid-template-columns:44px minmax(0,1fr) auto;gap:10px;padding:16px}
+    .thumb{width:44px;height:44px;flex:0 0 44px}
+    .row-actions{flex-direction:column;gap:2px}
+    .row-actions .ax{width:28px;height:28px}
+    .row-tags .tag{font-size:11px;padding:2px 7px}
+    .list-head{padding:20px 16px 12px}
+    .list-title{font-size:28px}
+    .rail-section{padding:8px 16px}
+    .masthead{padding:10px 16px}
+  }
+
+  /* offline banner */
+  .offline-banner{display:none;align-items:center;gap:10px;padding:8px 28px;font-size:13px;color:oklch(35% 0.10 60);background:oklch(96% 0.04 70);border-bottom:1px solid oklch(88% 0.06 60)}
+  body[data-offline="1"] .offline-banner{display:flex}
+  .offline-banner svg{flex:0 0 16px}
+  .offline-banner .last-sync{color:var(--muted);margin-inline-start:auto;font-variant-numeric:tabular-nums}
+  .offline-banner .retry{padding:4px 10px;border:1px solid oklch(80% 0.06 60);border-radius:6px;font-size:12px;font-weight:500;color:oklch(30% 0.10 60);background:oklch(99% 0.02 70)}
+  .offline-banner .retry:hover{background:oklch(94% 0.05 70)}
+  :root.dark .offline-banner{background:oklch(28% 0.07 60);border-bottom-color:oklch(36% 0.07 60);color:oklch(86% 0.08 70)}
+  :root.dark .offline-banner .retry{background:oklch(34% 0.07 60);border-color:oklch(42% 0.07 60);color:oklch(90% 0.08 70)}
+
+  /* selection bar (bulk) */
+  .row-check{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:1.5px solid var(--border-strong);border-radius:4px;background:var(--surface);display:none;align-items:center;justify-content:center;cursor:pointer;z-index:2}
+  .row:hover .row-check,body[data-select="1"] .row-check{display:flex}
+  .row-check.is-on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .row-check svg{display:none}
+  .row-check.is-on svg{display:block}
+  body[data-select="1"] .row{padding-inline-start:42px}
+  .row.is-selected{background:var(--accent-soft) !important}
+  :root.dark .row.is-selected{background:color-mix(in oklch, var(--accent) 18%, var(--surface))!important}
+  .selection-bar{position:sticky;top:67px;z-index:25;display:none;align-items:center;gap:14px;padding:12px 36px;background:var(--accent);color:oklch(99% 0.01 60);font-size:13.5px;font-weight:500;border-bottom:1px solid var(--accent-ink)}
+  body[data-select="1"] .selection-bar{display:flex}
+  .selection-bar .count{font-variant-numeric:tabular-nums}
+  .selection-bar .sb-spacer{flex:1}
+  .selection-bar button{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;color:oklch(99% 0.01 60);font-weight:500;font-size:13px;background:rgba(255,255,255,0.10)}
+  .selection-bar button:hover{background:rgba(255,255,255,0.20)}
+  .selection-bar button.cancel{background:transparent;border:1px solid rgba(255,255,255,0.30)}
+
+  /* empty state */
+  .empty-state{display:none;flex-direction:column;align-items:center;justify-content:center;padding:120px 36px;text-align:center;color:var(--muted)}
+  body[data-empty="1"] .empty-state{display:flex}
+  body[data-empty="1"] #article-list{display:none}
+  .empty-mark{width:88px;height:88px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;margin-bottom:24px}
+  :root.dark .empty-mark{color:var(--accent)}
+  .empty-state h2{font-family:var(--font-display);font-size:30px;font-weight:500;letter-spacing:-0.02em;color:var(--fg);margin:0 0 8px;text-wrap:balance}
+  .empty-state p{max-width:380px;margin:0 0 20px;line-height:1.5;text-wrap:pretty}
+  .empty-state .quote{font-family:var(--font-display);font-style:italic;font-size:16px;color:var(--subtle);margin-top:8px}
+
+  /* row error variant */
+  .row.is-error{cursor:default}
+  .row.is-error .row-title{color:var(--muted)}
+  .row.is-error .row-excerpt{color:oklch(48% 0.10 30)}
+  :root.dark .row.is-error .row-excerpt{color:oklch(70% 0.10 30)}
+  .row-retry{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;color:var(--fg);background:var(--surface);margin-top:6px}
+  .row-retry:hover{background:var(--surface-2)}
+
+  /* save modal & search palette — shared backdrop */
+  .modal-back{position:fixed;inset:0;background:color-mix(in oklch, oklch(0% 0 0) 32%, transparent);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:60;display:none;align-items:flex-start;justify-content:center;padding:90px 20px 40px;overflow-y:auto}
+  .modal-back.is-open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:520px;box-shadow:0 24px 48px rgb(0 0 0 / 0.18);overflow:hidden}
+
+  /* save modal */
+  .save-head{padding:22px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:14px}
+  .save-head .head-glyph{width:36px;height:36px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;flex:0 0 36px}
+  :root.dark .save-head .head-glyph{color:var(--accent)}
+  .save-head h3{margin:0 0 2px;font-family:var(--font-display);font-size:18px;font-weight:500;letter-spacing:-0.01em}
+  .save-head p{margin:0;color:var(--muted);font-size:13px}
+  .save-close{margin-inline-start:auto;width:28px;height:28px;display:grid;place-items:center;border-radius:6px;color:var(--subtle)}
+  .save-close:hover{background:var(--surface-2);color:var(--fg)}
+  .save-body{padding:20px 24px}
+  .save-input{width:100%;padding:12px 14px;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);border-radius:8px;font:inherit;font-family:var(--font-mono);font-size:13.5px}
+  .save-input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+  .save-hint{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--subtle);margin-top:10px}
+  .save-hint .kbd-mini{font-family:var(--font-mono);border:1px solid var(--border);background:var(--surface-2);padding:1px 5px;border-radius:3px;font-size:11px}
+  .save-foot{padding:14px 24px 16px;background:var(--surface-2);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .save-foot{flex-wrap:wrap}
+  .save-foot .clip{font-size:12px;color:var(--subtle);margin-inline-end:auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media (max-width:480px){.save-foot .clip{flex:1 0 100%;margin-bottom:6px}}
+  .save-stage{display:none}
+  .save-stage.is-on{display:block}
+
+  /* preview card during save */
+  .preview-card{display:flex;gap:14px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);margin-bottom:16px}
+  .preview-thumb{width:64px;height:64px;border-radius:6px;background:radial-gradient(120% 80% at 0% 0%, color-mix(in oklch, var(--accent) 36%, transparent), transparent 60%),linear-gradient(135deg, color-mix(in oklch, var(--accent) 18%, var(--surface)) 0%, var(--surface) 100%);flex:0 0 64px;display:grid;place-items:center;font-family:var(--font-display);font-size:24px;color:var(--accent-ink);font-weight:500}
+  :root.dark .preview-thumb{color:var(--accent)}
+  .preview-text{min-width:0;flex:1}
+  .preview-domain{font-size:12px;color:var(--muted);font-weight:500;margin-bottom:3px}
+  .preview-title{font-family:var(--font-display);font-size:16px;font-weight:500;line-height:1.3;letter-spacing:-0.01em;margin:0 0 4px;color:var(--fg);text-wrap:balance}
+  .preview-deck{font-size:13px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .preview-meta{font-size:11.5px;color:var(--subtle);margin-top:6px;font-variant-numeric:tabular-nums}
+
+  /* skeleton */
+  .skel{background:linear-gradient(90deg, var(--surface-2) 0%, color-mix(in oklch, var(--border) 70%, var(--surface-2)) 50%, var(--surface-2) 100%);background-size:200% 100%;animation:skel 1.1s ease-in-out infinite;border-radius:4px}
+  @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .skel-line{height:14px;margin-bottom:8px}
+  .skel-line.s-w70{width:70%}.skel-line.s-w50{width:50%}.skel-line.s-w90{width:90%}
+
+  /* tag picker */
+  .picker-label{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);margin-bottom:10px}
+  .picker-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .picker-tags .ptag{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;font-size:12.5px;color:var(--muted);background:var(--surface);cursor:pointer;user-select:none}
+  .picker-tags .ptag:hover{color:var(--fg)}
+  .picker-tags .ptag.is-on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+  :root.dark .picker-tags .ptag.is-on{color:var(--accent)}
+  .picker-tags .ptag .dot{width:6px;height:6px;border-radius:50%}
+  .picker-tags .new-tag{padding:5px 10px;border:1px dashed var(--border-strong);border-radius:999px;font-size:12.5px;color:var(--subtle);background:transparent;cursor:pointer}
+  .picker-tags .new-tag:hover{color:var(--fg);border-color:var(--fg)}
+  .picker-tags .new-tag-input{padding:4px 10px;font:inherit;font-size:12.5px;border:1px solid var(--accent);border-radius:999px;background:var(--surface);min-width:120px;outline:none}
+
+  /* search palette */
+  .palette-back{display:none;align-items:flex-start;justify-content:center;padding:80px 20px 40px}
+  .palette-back.is-open{display:flex}
+  .palette{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:620px;box-shadow:0 24px 48px rgb(0 0 0 / 0.22);overflow:hidden;max-height:calc(100vh - 140px);display:flex;flex-direction:column}
+  .palette-search{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)}
+  .palette-search input{flex:1;border:0;background:transparent;font:inherit;font-size:16px;color:var(--fg);outline:none}
+  .palette-search input::placeholder{color:var(--subtle)}
+  .palette-search .icn{color:var(--subtle)}
+  .palette-search .esc{font-family:var(--font-mono);font-size:11px;color:var(--subtle);border:1px solid var(--border);background:var(--surface-2);padding:2px 6px;border-radius:4px}
+  .palette-filters{display:flex;gap:4px;padding:10px 14px;border-bottom:1px solid var(--border);overflow-x:auto;white-space:nowrap}
+  .palette-filters .pf{padding:5px 11px;font-size:12.5px;color:var(--muted);border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .palette-filters .pf:hover{background:var(--surface-2);color:var(--fg)}
+  .palette-filters .pf.is-on{background:var(--accent-soft);color:var(--accent-ink)}
+  :root.dark .palette-filters .pf.is-on{color:var(--accent)}
+  .palette-filters .pf .num{font-variant-numeric:tabular-nums;font-size:11px;color:var(--subtle)}
+  .palette-filters .pf.is-on .num{color:inherit;opacity:0.85}
+  .palette-results{overflow-y:auto;padding:8px 0}
+  .palette-group{padding:8px 0}
+  .palette-group:not(:first-child){border-top:1px solid var(--border)}
+  .palette-group h5{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);font-weight:500;margin:6px 18px 6px}
+  .pres{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;padding:8px 18px;align-items:center;cursor:pointer}
+  .pres:hover,.pres.is-cursor{background:var(--surface-2)}
+  .pres-icon{width:28px;height:28px;border-radius:6px;background:var(--surface-2);display:grid;place-items:center;color:var(--muted);font-family:var(--font-display);font-size:14px;font-weight:500}
+  .pres-icon.tag-ic{background:transparent;border:1px solid var(--border)}
+  .pres-icon.hl-ic{color:oklch(40% 0.14 85);background:var(--highlight)}
+  :root.dark .pres-icon.hl-ic{color:oklch(80% 0.10 85)}
+  .pres-body{min-width:0}
+  .pres-title{font-size:14px;color:var(--fg);font-weight:500;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pres-meta{font-size:12px;color:var(--subtle);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pres mark{background:var(--accent-soft);color:var(--accent-ink);padding:0 1px;border-radius:2px}
+  :root.dark .pres mark{color:var(--accent)}
+  .pres-kbd{font-family:var(--font-mono);font-size:11px;color:var(--subtle);border:1px solid var(--border);background:var(--surface-2);padding:1px 6px;border-radius:4px}
+  .palette-empty{padding:48px 24px;text-align:center;color:var(--muted);font-size:13.5px}
+  .palette-foot{padding:8px 14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--subtle);display:flex;gap:14px;justify-content:flex-start}
+  .palette-foot .k{font-family:var(--font-mono);border:1px solid var(--border);background:var(--surface-2);padding:1px 5px;border-radius:3px}
+
+  /* highlight bubble */
+  .hl-bubble{position:absolute;display:none;background:oklch(20% 0.018 60);color:oklch(96% 0.006 60);border-radius:8px;padding:4px;box-shadow:0 8px 18px rgb(0 0 0 / 0.22);z-index:40;transform:translate(-50%, -100%) translateY(-8px)}
+  .hl-bubble.is-open{display:flex;align-items:center;gap:2px}
+  .hl-bubble button{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;font-size:12.5px;color:inherit;border-radius:5px}
+  .hl-bubble button:hover{background:rgba(255,255,255,0.10)}
+  .hl-bubble::after{content:"";position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid oklch(20% 0.018 60)}
+  .article-body mark.hl-user{background:var(--highlight);padding:0 2px;cursor:pointer}
+  .article-body mark.hl-note{background:var(--highlight);padding:0 2px;cursor:pointer;border-bottom:2px solid var(--accent)}
+  .note-pin{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;line-height:14px;text-align:center;font-family:var(--font-mono);margin-inline-start:2px;cursor:pointer;vertical-align:1px}
+
+  /* margin notes panel */
+  .notes-panel{position:fixed;top:67px;bottom:0;right:0;width:340px;background:var(--surface);border-inline-start:1px solid var(--border);transform:translateX(100%);transition:transform 200ms ease;z-index:35;display:flex;flex-direction:column}
+  body[data-notes="1"] .notes-panel{transform:translateX(0)}
+  .notes-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+  .notes-head h3{flex:1;margin:0;font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);font-weight:500}
+  .notes-head .close{width:28px;height:28px;display:grid;place-items:center;border-radius:6px;color:var(--subtle)}
+  .notes-head .close:hover{background:var(--surface-2);color:var(--fg)}
+  .notes-list{flex:1;overflow-y:auto;padding:10px}
+  .note-card{padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);margin-bottom:10px;cursor:pointer}
+  .note-card:hover{border-color:var(--border-strong)}
+  .note-card.is-active{border-color:var(--accent);background:var(--accent-soft)}
+  :root.dark .note-card.is-active{background:color-mix(in oklch, var(--accent) 14%, var(--surface))}
+  .note-quote{font-family:var(--font-display);font-style:italic;font-size:13.5px;line-height:1.4;color:var(--fg);margin-bottom:8px;padding-inline-start:8px;border-inline-start:2px solid var(--accent)}
+  .note-text{font-size:13px;color:var(--muted);line-height:1.4;white-space:pre-wrap}
+  .note-text-input{width:100%;border:0;outline:none;background:transparent;font:inherit;font-size:13px;line-height:1.4;color:var(--fg);resize:none;min-height:60px}
+  .note-meta{font-size:11px;color:var(--subtle);margin-top:6px;font-variant-numeric:tabular-nums}
+  @media (max-width:880px){.notes-panel{width:100%;top:0;border-inline-start:0}}
+
+  /* toast */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);padding:10px 18px;background:var(--fg);color:var(--bg);border-radius:8px;font-size:13.5px;font-weight:500;box-shadow:0 8px 20px rgb(0 0 0 / 0.18);opacity:0;pointer-events:none;transition:all 200ms ease;z-index:80;display:flex;align-items:center;gap:10px}
+  .toast.is-on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .undo{font-weight:500;color:var(--accent);text-decoration:underline}
+  :root.dark .toast{background:var(--surface);color:var(--fg);border:1px solid var(--border)}
+
+  /* tweaks panel */
+  .tweaks-toggle{position:fixed;right:20px;bottom:20px;width:44px;height:44px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted);box-shadow:0 4px 12px rgb(0 0 0 / 0.08);z-index:50;cursor:pointer}
+  .tweaks-toggle:hover{color:var(--fg)}
+  .tweaks{position:fixed;right:20px;bottom:74px;width:240px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:0 8px 24px rgb(0 0 0 / 0.12);z-index:50;display:none;font-size:13px}
+  .tweaks.is-open{display:block}
+  .tweaks h4{margin:0 0 10px;font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--subtle);font-weight:500}
+  .tweaks .row-tw{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .tweaks .row-tw:last-child{margin-bottom:0}
+  .tweaks .row-tw label{color:var(--muted);font-size:12.5px}
+  .tweaks .swatches{display:flex;gap:6px}
+  .tweaks .sw{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);cursor:pointer}
+  .tweaks .sw.is-on{border-color:var(--fg)}
+  .tweaks .seg{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .tweaks .seg button{padding:4px 10px;font-size:12px;color:var(--muted)}
+  .tweaks .seg button.is-on{background:var(--accent-soft);color:var(--accent-ink)}
+  :root.dark .tweaks .seg button.is-on{color:var(--accent)}
+  .tweaks input[type="range"]{width:100px}
+</style>
+</head>
+<body data-view="library">
+
+<!-- ===== MASTHEAD ===== -->
+<header class="masthead">
+  <div class="brand">
+    <span class="mark"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v3H4zM4 9h16v11l-8-4-8 4z"/></svg></span>
+    <span class="word">w<em>a</em>llabag</span>
+  </div>
+  <div class="search">
+    <span class="icn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+    <input id="masthead-search" type="search" placeholder="Search 247 saved articles, tags, authors…" readonly style="cursor:pointer" />
+    <span class="kbd">⌘K</span>
+  </div>
+  <div class="top-actions">
+    <button class="btn btn-icon" id="add-url-btn-mob" title="Add URL"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="btn" id="add-url-btn">Add URL</button>
+    <button class="btn btn-primary" id="save-btn">+ Save</button>
+    <span class="avatar">CP</span>
+  </div>
+</header>
+
+<!-- ===== LIBRARY SHELL ===== -->
+<div class="lib-shell">
+<div class="lib-grid">
+
+  <!-- LEFT RAIL -->
+  <aside class="rail">
+    <div class="rail-section">
+      <div class="rail-label">Library</div>
+      <ul class="rail-list">
+        <li class="rail-item is-active">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          Unread <span class="count">28</span>
+        </li>
+        <li class="rail-item">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6 .9-4.4 4.3 1 6L12 17l-5.3 2.7 1-6L3.3 9.4l6-.9z"/></svg>
+          Starred <span class="count">12</span>
+        </li>
+        <li class="rail-item">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/></svg>
+          Archive <span class="count">203</span>
+        </li>
+        <li class="rail-item">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l-9 9 5 5 9-9V4z"/><path d="m9 18-4 4"/></svg>
+          Highlights <span class="count">94</span>
+        </li>
+      </ul>
+    </div>
+    <div class="rail-section">
+      <div class="rail-label">Tags</div>
+      <div style="padding:0 6px">
+        <span class="tag-chip"><span class="dot" style="background:oklch(60% 0.18 30)"></span>longreads <span style="color:var(--subtle);font-variant-numeric:tabular-nums;font-size:11px">42</span></span>
+        <span class="tag-chip"><span class="dot" style="background:oklch(60% 0.16 175)"></span>philosophy <span style="color:var(--subtle);font-variant-numeric:tabular-nums;font-size:11px">18</span></span>
+        <span class="tag-chip"><span class="dot" style="background:oklch(60% 0.18 250)"></span>tools <span style="color:var(--subtle);font-variant-numeric:tabular-nums;font-size:11px">26</span></span>
+        <span class="tag-chip"><span class="dot" style="background:oklch(60% 0.18 145)"></span>self-hosting <span style="color:var(--subtle);font-variant-numeric:tabular-nums;font-size:11px">9</span></span>
+        <span class="tag-chip"><span class="dot" style="background:oklch(60% 0.18 80)"></span>food <span style="color:var(--subtle);font-variant-numeric:tabular-nums;font-size:11px">7</span></span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- LIST PANE -->
+  <main class="list-pane">
+    <div class="offline-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7c2.7 0 5 1 7 2.5M22 12s-3 7-10 7c-2.7 0-5-1-7-2.5"/><path d="M2 2l20 20"/></svg>
+      <span>Offline — showing cached library.</span>
+      <span class="last-sync">Last sync · 2h 14m ago</span>
+      <button class="retry">Retry</button>
+    </div>
+    <div class="selection-bar">
+      <span class="count"><span id="sel-count">0</span> selected</span>
+      <div class="sb-spacer"></div>
+      <button data-bulk="star"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6 .9-4.4 4.3 1 6L12 17l-5.3 2.7 1-6L3.3 9.4l6-.9z"/></svg> Star</button>
+      <button data-bulk="archive"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/></svg> Archive</button>
+      <button data-bulk="tag"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V3h10z"/></svg> Tag</button>
+      <button data-bulk="delete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M5 6l1 14h12l1-14M10 11v5M14 11v5"/></svg> Delete</button>
+      <button class="cancel" id="sel-cancel">Cancel</button>
+    </div>
+    <header class="list-head">
+      <div class="list-title-row">
+        <h1 class="list-title">Unread</h1>
+        <span class="list-title-meta">28 articles · 4 hr 12 min to finish</span>
+      </div>
+      <div class="list-controls">
+        <button class="pill is-on">All <span class="num">28</span></button>
+        <button class="pill">Long <span class="num">11</span></button>
+        <button class="pill">Quick <span class="num">9</span></button>
+        <button class="pill">In progress <span class="num">3</span></button>
+        <span class="sort-divider"></span>
+        <span class="sort">Sort
+          <select><option>Recently saved</option><option>Shortest first</option><option>Longest first</option><option>By source</option></select>
+        </span>
+      </div>
+    </header>
+    <section class="list" id="article-list"></section>
+    <section class="empty-state">
+      <div class="empty-mark">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v3H4zM4 9h16v11l-8-4-8 4z"/></svg>
+      </div>
+      <h2>Caught up.</h2>
+      <p>Nothing left to read in your unread shelf. The library is still here — 203 archived pieces, 94 highlights — whenever you want to wander back.</p>
+      <button class="btn">Browse archive</button>
+      <p class="quote">"Real libraries are mostly unread shelves. That is the shape of having a library at all."</p>
+    </section>
+  </main>
+
+  <!-- RIGHT CONTEXT -->
+  <aside class="context">
+    <div class="ctx-card">
+      <h3>This week</h3>
+      <div class="ctx-stat"><span class="lbl">Articles read</span><span class="val">9</span></div>
+      <div class="ctx-stat"><span class="lbl">Time spent</span><span class="val">2h 18m</span></div>
+      <div class="ctx-stat"><span class="lbl">Highlights made</span><span class="val">14</span></div>
+    </div>
+    <div class="ctx-card resume-card" data-resume="a06">
+      <div class="resume-thumb"><div class="resume-progress"><span style="width:62%"></span></div></div>
+      <div class="resume-body">
+        <div class="resume-eyebrow">Continue reading · 62%</div>
+        <h3 class="resume-title">The brief, glorious life of the third-wave bagel</h3>
+        <div class="resume-meta">3 min left · eater.com</div>
+      </div>
+    </div>
+    <div class="ctx-card">
+      <h3>Sync</h3>
+      <div class="ctx-stat"><span class="lbl">Last sync</span><span class="val" style="font-size:14px;color:var(--teal);font-family:var(--font-body);font-weight:500">just now</span></div>
+      <div class="ctx-stat"><span class="lbl">Self-hosted</span><span class="val" style="font-size:14px;font-family:var(--font-body);font-weight:500">v2.6 · alpine.lan</span></div>
+    </div>
+  </aside>
+
+</div>
+</div>
+
+<!-- ===== READER SHELL ===== -->
+<div class="reader-shell">
+  <header class="reader-bar">
+    <button class="back" id="back-to-list">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Library
+    </button>
+    <div class="title-meta">
+      <span id="reader-domain">aeon.co</span> ·
+      <span id="reader-progress-pct">0%</span>
+      <span class="progress-track"><span id="reader-progress-bar"></span></span>
+      <span id="reader-time-left">14 min</span> left
+    </div>
+    <div class="ax-row">
+      <button class="ax" title="A−"><span style="font-family:var(--font-display);font-size:13px">A−</span></button>
+      <button class="ax" title="A+"><span style="font-family:var(--font-display);font-size:16px">A+</span></button>
+      <button class="ax" title="Theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <button class="ax" id="reader-notes-btn" title="Highlights & notes">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l-9 9 5 5 9-9V4z"/><path d="m9 18-4 4"/></svg>
+        <span id="reader-notes-count" style="font-size:11px;font-family:var(--font-mono);color:var(--accent);margin-inline-start:2px"></span>
+      </button>
+      <button class="ax" title="Star">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6 .9-4.4 4.3 1 6L12 17l-5.3 2.7 1-6L3.3 9.4l6-.9z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="reader-body">
+    <main class="article" id="article">
+      <div class="article-eyebrow" id="reader-eyebrow">AEON · 14 MIN READ · SAVED YESTERDAY</div>
+      <h1 class="article-title" id="reader-title">The Library You Carry</h1>
+      <p class="article-deck" id="reader-deck">A read-it-later list isn't a queue — it's a portrait. What we save, and how rarely we return to it, says more about us than what we read.</p>
+      <div class="byline">
+        <div class="byline-ava" id="reader-ava">JK</div>
+        <div class="byline-text">
+          <div class="byline-author" id="reader-author">Jules Koren</div>
+          <div class="byline-meta"><span id="reader-source">aeon.co/essays/the-library</span> · saved <span>yesterday</span></div>
+        </div>
+      </div>
+      <div class="hero-figure"></div>
+      <div class="hero-caption">A reader's library, photographed in late afternoon light. — illustration</div>
+
+      <div class="article-body">
+        <p>The first time I noticed I had a personal library — not a shelf, but a <em>practice</em> — I was waiting for a train in Helsinki. The departure board kept lying about the platform. I opened my reader, expecting the usual queue of unread tabs. Instead I found something stranger: a slow accretion of pieces I had been saving for nearly a decade. Essays on glaciers. A long defense of birds. The full text of a 2014 magazine column about a man who repaired pianos. Most of it I had never finished. Some of it I had forgotten saving. <mark class="hl">All of it, taken together, looked like a portrait of someone I half-recognized.</mark></p>
+
+        <p>It is fashionable to feel guilty about a backlog. The whole genre of read-it-later apps has been pitched, for fifteen years now, as a productivity affordance: capture now, read later, achieve inbox zero on the open web. The premise has always been faintly anxious. Articles are tasks; tasks accumulate; accumulated tasks are debt; debt must be paid. Pocket once advertised itself, in a piece of copy that has aged badly, as a way to "tame the internet."</p>
+
+        <p class="pullquote">"What we save, and how rarely we return to it, says more about us than what we read."</p>
+
+        <p>But sit with the queue long enough — say, the ten years it took mine to fill — and a different reading suggests itself. Saved articles do not behave like tasks. They behave like books. A friend's bookshelf, glanced at over a glass of wine, is a quiet form of self-disclosure. So is a saved-article list, if you can bear to look at it.</p>
+
+        <figure>
+          <div class="fig"></div>
+          <figcaption>Ten years of saves, sorted by topic. The shape of someone's curiosity, rendered as a heatmap.</figcaption>
+        </figure>
+
+        <p>What I noticed, scrolling backward through mine on the platform in Helsinki, was a kind of loose argument I had been making with myself for a decade. About slowness. About craft. About the relationship between a place and the work it produces. I had not realised I was making the argument; I had only been saving things. The library knew before I did.</p>
+
+        <blockquote>"A backlog is a self-portrait, drawn slowly, by accident, with a stranger's hand."</blockquote>
+
+        <p>There is, I think, a small useful discipline available here, if you'd like one:</p>
+
+        <ol>
+          <li><strong>Stop measuring the queue by length.</strong> The unread count is a productivity metric pretending to be a literary one. Hide it. Most reader apps will let you. The good ones default to it.</li>
+          <li><strong>Re-read your saves.</strong> Once a season, scroll to the bottom of the list — the oldest pieces — and read three. You will find at least one is no longer interesting. That is fine. Archive it. The other two will be sharper than anything you saved this week, because the version of you who saved them has had years to decide whether they were right.</li>
+          <li><strong>Trust the fold.</strong> If a piece has sat in the queue for two years and you still won't archive it, something in you wants it nearby. Leave it. The library is not the to-do list; it is the room.</li>
+        </ol>
+
+        <p>The third habit is the one I struggled with longest. There is a quiet shame about a long unread list, and the obvious solution — declare bankruptcy, archive everything, start over — feels like decisive housekeeping. It is not. It is the thing a person does when they confuse their library with their inbox. Real libraries have unread shelves. Real libraries are mostly unread shelves. That is the shape of having a library at all.</p>
+
+        <p>The portable version of the same room is, oddly, easier to maintain. It does not gather dust. It can be searched. It travels in a pocket. It costs almost nothing to keep. The only thing you have to give up is the urge to drain it — to confuse the queue with the library, the inbox with the room.</p>
+
+        <p>So: a small recommendation. The next time you open your reader, do not start with the most recent article. Scroll all the way to the bottom and look at what your past self thought worth carrying. You will find a stranger there. Then come back to today. The library was the point.</p>
+      </div>
+    </main>
+
+    <aside class="toc">
+      <h4>In this article</h4>
+      <ol>
+        <li class="is-active">A queue, glimpsed in Helsinki</li>
+        <li>The productivity frame</li>
+        <li>Saves as self-portrait</li>
+        <li>A small discipline</li>
+        <li>Why bankruptcy is the wrong move</li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<!-- ===== SAVE MODAL ===== -->
+<div class="modal-back" id="save-back">
+  <div class="modal" role="dialog" aria-label="Save article">
+    <div class="save-stage is-on" data-stage="paste">
+      <div class="save-head">
+        <div class="head-glyph">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v3H4zM4 9h16v11l-8-4-8 4z"/></svg>
+        </div>
+        <div>
+          <h3>Save an article</h3>
+          <p>Paste a URL — wallabag fetches the readable version and stores it on your server.</p>
+        </div>
+        <button class="save-close" id="save-close-1" title="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="save-body">
+        <input class="save-input" id="save-url" type="url" placeholder="https://example.com/article" autocomplete="off" spellcheck="false" />
+        <div class="save-hint">
+          <span class="kbd-mini">⌘V</span> paste · <span class="kbd-mini">⏎</span> fetch
+        </div>
+      </div>
+      <div class="save-foot">
+        <span class="clip">Clipboard detected · <em style="color:var(--muted);font-style:normal">noemamag.com/essays/edmund-lavoie</em></span>
+        <button class="btn" id="save-cancel-1">Cancel</button>
+        <button class="btn btn-primary" id="save-fetch">Fetch</button>
+      </div>
+    </div>
+
+    <div class="save-stage" data-stage="loading">
+      <div class="save-head">
+        <div class="head-glyph">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+        </div>
+        <div>
+          <h3>Reading the page…</h3>
+          <p>Stripping nav, ads, and trackers. Keeping the words.</p>
+        </div>
+      </div>
+      <div class="save-body">
+        <div class="preview-card">
+          <div class="skel" style="width:64px;height:64px;border-radius:6px;flex:0 0 64px"></div>
+          <div style="flex:1">
+            <div class="skel skel-line s-w50"></div>
+            <div class="skel skel-line s-w90"></div>
+            <div class="skel skel-line s-w70"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="save-stage" data-stage="confirm">
+      <div class="save-head">
+        <div class="head-glyph" style="background:oklch(94% 0.06 145);color:oklch(38% 0.12 145)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+        </div>
+        <div>
+          <h3>Ready to save</h3>
+          <p>Pick tags, then drop it in your library.</p>
+        </div>
+        <button class="save-close" id="save-close-2" title="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="save-body">
+        <div class="preview-card">
+          <div class="preview-thumb">M</div>
+          <div class="preview-text">
+            <div class="preview-domain">noemamag.com</div>
+            <h4 class="preview-title">The man who fixes pianos in Maine</h4>
+            <p class="preview-deck">For thirty-one years, Edmund Lavoie has tuned the same six concert grands at Bowdoin. He has never sat down to play any of them.</p>
+            <div class="preview-meta">19 min read · by Cassandra Inukai</div>
+          </div>
+        </div>
+        <div class="picker-label">Tags</div>
+        <div class="picker-tags" id="picker-tags">
+          <button class="ptag is-on"><span class="dot" style="background:oklch(60% 0.18 30)"></span>longreads</button>
+          <button class="ptag"><span class="dot" style="background:oklch(60% 0.16 175)"></span>philosophy</button>
+          <button class="ptag is-on"><span class="dot" style="background:oklch(60% 0.18 60)"></span>craft</button>
+          <button class="ptag"><span class="dot" style="background:oklch(60% 0.18 250)"></span>tools</button>
+          <button class="ptag"><span class="dot" style="background:oklch(60% 0.18 145)"></span>self-hosting</button>
+          <button class="new-tag" id="new-tag-btn">+ new tag</button>
+        </div>
+      </div>
+      <div class="save-foot">
+        <span class="clip">Reader-only mode · keep formatting</span>
+        <button class="btn" id="save-cancel-2">Cancel</button>
+        <button class="btn btn-primary" id="save-confirm">Save to library</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SEARCH PALETTE ===== -->
+<div class="modal-back palette-back" id="palette-back">
+  <div class="palette" role="dialog" aria-label="Search">
+    <div class="palette-search">
+      <span class="icn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+      <input id="palette-input" type="search" placeholder="Search articles, tags, highlights, authors…" autocomplete="off" spellcheck="false" />
+      <span class="esc">esc</span>
+    </div>
+    <div class="palette-filters" id="palette-filters">
+      <button class="pf is-on" data-f="all">All <span class="num">14</span></button>
+      <button class="pf" data-f="article">Articles <span class="num">8</span></button>
+      <button class="pf" data-f="tag">Tags <span class="num">2</span></button>
+      <button class="pf" data-f="highlight">Highlights <span class="num">3</span></button>
+      <button class="pf" data-f="author">Authors <span class="num">1</span></button>
+    </div>
+    <div class="palette-results" id="palette-results"></div>
+    <div class="palette-foot">
+      <span><span class="k">↑↓</span> navigate</span>
+      <span><span class="k">⏎</span> open</span>
+      <span><span class="k">⌘⏎</span> star</span>
+      <span><span class="k">esc</span> close</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HIGHLIGHT BUBBLE ===== -->
+<div class="hl-bubble" id="hl-bubble">
+  <button data-hl="highlight">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14 6-6m-3-3 5 5-9 9H3v-5z"/></svg>
+    Highlight
+  </button>
+  <button data-hl="note">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg>
+    Note
+  </button>
+  <button data-hl="copy">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+    Copy
+  </button>
+</div>
+
+<!-- ===== NOTES PANEL ===== -->
+<aside class="notes-panel">
+  <header class="notes-head">
+    <h3>Highlights & Notes <span style="color:var(--muted);font-family:var(--font-body);text-transform:none;letter-spacing:0;font-size:12.5px" id="notes-count">· 0</span></h3>
+    <button class="close" id="notes-close">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </header>
+  <div class="notes-list" id="notes-list">
+    <p style="padding:24px;color:var(--subtle);font-size:13px;text-align:center">Select any text to highlight or annotate.</p>
+  </div>
+</aside>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"><span id="toast-msg">Saved</span><button class="undo" id="toast-undo" style="display:none">Undo</button></div>
+
+<!-- ===== TWEAKS ===== -->
+<button class="tweaks-toggle" id="tweaks-toggle" title="Tweaks">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V14M4 10V3M12 21V12M12 8V3M20 21V16M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+</button>
+<div class="tweaks" id="tweaks">
+  <h4>Design tweaks</h4>
+  <div class="row-tw">
+    <label>Accent</label>
+    <div class="swatches" id="tw-accent">
+      <button class="sw is-on" data-h="30"  data-c="0.19" style="background:oklch(53% 0.19 30)" title="wallabag red"></button>
+      <button class="sw"        data-h="20"  data-c="0.18" style="background:oklch(53% 0.18 20)" title="rust"></button>
+      <button class="sw"        data-h="265" data-c="0.18" style="background:oklch(53% 0.18 265)" title="cobalt"></button>
+      <button class="sw"        data-h="155" data-c="0.14" style="background:oklch(50% 0.14 155)" title="moss"></button>
+      <button class="sw"        data-h="60"  data-c="0.14" style="background:oklch(60% 0.14 60)"  title="ochre"></button>
+    </div>
+  </div>
+  <div class="row-tw">
+    <label>Density</label>
+    <div class="seg" id="tw-density">
+      <button class="is-on" data-d="cozy">Cozy</button>
+      <button data-d="compact">Compact</button>
+    </div>
+  </div>
+  <div class="row-tw">
+    <label>Dark mode</label>
+    <div class="seg"><button id="tw-dark">Off</button></div>
+  </div>
+  <div class="row-tw">
+    <label>Reader width</label>
+    <input type="range" id="tw-width" min="560" max="780" step="20" value="680">
+  </div>
+  <h4 style="margin-top:14px">Demo states</h4>
+  <div class="row-tw">
+    <label>List state</label>
+    <div class="seg" id="tw-state">
+      <button class="is-on" data-st="normal">Normal</button>
+      <button data-st="empty">Empty</button>
+      <button data-st="error">Error row</button>
+    </div>
+  </div>
+  <div class="row-tw">
+    <label>Connection</label>
+    <div class="seg" id="tw-conn">
+      <button class="is-on" data-c="online">Online</button>
+      <button data-c="offline">Offline</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "accentH": 30,
+    "accentC": 0.19,
+    "density": "cozy",
+    "dark": false,
+    "readerWidth": 680
+  }/*EDITMODE-END*/;
+
+  let state = JSON.parse(JSON.stringify(TWEAK_DEFAULTS));
+  try {
+    const saved = JSON.parse(localStorage.getItem('wallabag-tweaks') || 'null');
+    if (saved) state = Object.assign(state, saved);
+  } catch (e) {}
+
+  const articles = [
+    { id:'a01', glyph:'L', domain:'aeon.co', title:'The Library You Carry',
+      excerpt:'A read-it-later list isn’t a queue — it’s a portrait. What we save, and how rarely we return to it, says more about us than what we read.',
+      readTime:14, savedAt:'Yesterday', tags:['philosophy','longreads'],
+      author:'Jules Koren', authorInitials:'JK', source:'aeon.co/essays/the-library',
+      hue:30, unread:true, starred:true, progress:0 },
+    { id:'a02', glyph:'F', domain:'craigmod.com', title:'Fast software, the best software',
+      excerpt:'A meditation on the joy of using fast tools, and why slowness is a small act of disrespect for the people who use what you make.',
+      readTime:9, savedAt:'2 days ago', tags:['design','tools'],
+      author:'Craig Mod', authorInitials:'CM', source:'craigmod.com/essays/fast-software',
+      hue:220, unread:true, progress:0 },
+    { id:'a03', glyph:'C', domain:'newyorker.com', title:'The curse of the Bahia emerald, a 840-pound rock that ruins lives',
+      excerpt:'It weighs eight hundred and forty pounds, and may be worth four hundred million dollars. Or worthless. Or stolen. Twenty years of court fights have not settled which.',
+      readTime:41, savedAt:'3 days ago', tags:['longreads','crime'],
+      author:'Patrick Radden Keefe', authorInitials:'PK', source:'newyorker.com/magazine/bahia-emerald',
+      hue:340, unread:true, progress:0 },
+    { id:'a04', glyph:'P', domain:'lrb.co.uk', title:'In praise of the slow read',
+      excerpt:'There is a kind of reading that resists summary; what survives the second sitting is rarely what you expected on the first.',
+      readTime:22, savedAt:'4 days ago', tags:['philosophy'],
+      author:'Marina Warner', authorInitials:'MW', source:'lrb.co.uk/v46/n04/slow-read',
+      hue:175, unread:false, progress:0.12 },
+    { id:'a05', glyph:'W', domain:'aeon.co', title:'Why we stopped making Einsteins',
+      excerpt:'A century ago, the West was an engine of geniuses; today the engine sputters. The reasons are duller than the conspiracy theories.',
+      readTime:18, savedAt:'A week ago', tags:['science','culture'],
+      author:'Erik Hoel', authorInitials:'EH', source:'aeon.co/essays/einsteins',
+      hue:250, unread:true, progress:0 },
+    { id:'a06', glyph:'B', domain:'eater.com', title:'The brief, glorious life of the third-wave bagel',
+      excerpt:'For about eighteen months, you could buy a bagel in three American cities that wasn’t embarrassed by Montreal. Then it ended.',
+      readTime:7, savedAt:'A week ago', tags:['food'],
+      author:'Helen Rosner', authorInitials:'HR', source:'eater.com/longform/bagel',
+      hue:80, unread:false, progress:0.62 },
+    { id:'a07', glyph:'O', domain:'lwn.net', title:'On the long, slow death of the Linux desktop assumption',
+      excerpt:'The desktop never died. The assumption did. A look at how Linux quietly stopped being a desktop project and became a runtime.',
+      readTime:16, savedAt:'Mar 2', tags:['self-hosting','tools'],
+      author:'Jonathan Corbet', authorInitials:'JC', source:'lwn.net/Articles/desktop-runtime',
+      hue:200, unread:true, progress:0 },
+    { id:'a08', glyph:'R', domain:'thefence.co.uk', title:'A reasonable defence of birds',
+      excerpt:'Why our nineteenth-century settlement with the avian world has come unstuck, and what a sensible person can still do about pigeons.',
+      readTime:12, savedAt:'Feb 26', tags:['nature','humour'],
+      author:'Olivia Goodall', authorInitials:'OG', source:'thefence.co.uk/birds',
+      hue:145, unread:false, progress:1 },
+    { id:'a09', glyph:'S', domain:'every.to', title:'Self-hosting is back, and weirder than before',
+      excerpt:'A new generation of self-hosters isn’t fleeing the cloud — they’re curating it. Notes from a movement that doesn’t want to call itself one.',
+      readTime:11, savedAt:'Feb 24', tags:['self-hosting','tools'],
+      author:'Vesper Holt', authorInitials:'VH', source:'every.to/p/self-hosting-is-back',
+      hue:30, unread:true, progress:0 },
+    { id:'a10', glyph:'M', domain:'noemamag.com', title:'The man who fixes pianos in Maine',
+      excerpt:'For thirty-one years, Edmund Lavoie has tuned the same six concert grands at Bowdoin. He has never sat down to play any of them.',
+      readTime:19, savedAt:'Feb 21', tags:['longreads','craft'],
+      author:'Cassandra Inukai', authorInitials:'CI', source:'noemamag.com/essays/edmund-lavoie',
+      hue:60, unread:false, progress:0.38 }
+  ];
+
+  function progressFragment(a){
+    if (a.progress === 0) return `<span class="read-time">${a.readTime} min read</span>`;
+    if (a.progress >= 1) return `<span style="color:var(--subtle)">finished</span>`;
+    const pct = Math.round(a.progress * 100);
+    return `<span class="progress"><span class="progress-bar"><span style="width:${pct}%"></span></span>${pct}% · ${Math.round(a.readTime * (1 - a.progress))} min left</span>`;
+  }
+
+  function renderList(){
+    const list = document.getElementById('article-list');
+    list.innerHTML = articles.map(a => a.error ? `
+      <article class="row is-error" data-id="${a.id}">
+        <div class="thumb" style="--th: oklch(58% 0.10 30);"><span class="glyph">!</span></div>
+        <div class="row-body">
+          <div class="row-meta">
+            <span class="domain">${a.domain}</span>
+            <span class="sep">·</span>
+            <span style="color:oklch(50% 0.16 30)">couldn't fetch</span>
+            <span class="sep">·</span>
+            <span>${a.savedAt}</span>
+          </div>
+          <h2 class="row-title">${a.title}</h2>
+          <p class="row-excerpt">Server returned 403 — the source may require login, or block automated readers.</p>
+          <button class="row-retry">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+            Retry
+          </button>
+        </div>
+        <div class="row-actions">
+          <button class="ax" data-act="archive" title="Dismiss">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+      </article>
+    ` : `
+      <article class="row ${a.unread ? 'is-unread' : ''} ${a.progress >= 1 ? 'is-archived' : ''}" data-id="${a.id}">
+        <button class="row-check" data-check="${a.id}" title="Select">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+        </button>
+        <div class="thumb" style="--th: oklch(58% 0.14 ${a.hue});">
+          <span class="glyph">${a.glyph}</span>
+        </div>
+        <div class="row-body">
+          <div class="row-meta">
+            <span class="domain">${a.domain}</span>
+            <span class="sep">·</span>
+            ${progressFragment(a)}
+            <span class="sep">·</span>
+            <span>${a.savedAt}</span>
+          </div>
+          <h2 class="row-title">${a.title}</h2>
+          <p class="row-excerpt">${a.excerpt}</p>
+          <div class="row-tags">${a.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+        </div>
+        <div class="row-actions">
+          <button class="ax ${a.starred ? 'is-on' : ''}" data-act="star" title="Star">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="${a.starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6 .9-4.4 4.3 1 6L12 17l-5.3 2.7 1-6L3.3 9.4l6-.9z"/></svg>
+          </button>
+          <button class="ax" data-act="archive" title="Archive">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/></svg>
+          </button>
+          <button class="ax" data-act="tag" title="Tag">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V3h10z"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </article>
+    `).join('');
+
+    list.querySelectorAll('.row').forEach(row => {
+      row.addEventListener('click', e => {
+        if (e.target.closest('.ax') || e.target.closest('.row-check') || e.target.closest('.row-retry')) return;
+        if (document.body.dataset.select === '1') {
+          toggleSelect(row.dataset.id);
+        } else {
+          openReader(row.dataset.id);
+        }
+      });
+    });
+    list.querySelectorAll('.row-check').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); toggleSelect(b.dataset.check); });
+    });
+    list.querySelectorAll('.ax').forEach(b => {
+      b.addEventListener('click', e => { e.stopPropagation(); b.classList.toggle('is-on'); });
+    });
+  }
+
+  function openReader(id){
+    const a = articles.find(x => x.id === id) || articles[0];
+    document.getElementById('reader-eyebrow').textContent =
+      `${a.domain.split('.')[0].toUpperCase()} · ${a.readTime} MIN READ · SAVED ${a.savedAt.toUpperCase()}`;
+    document.getElementById('reader-title').textContent = a.title;
+    document.getElementById('reader-deck').textContent = a.excerpt;
+    document.getElementById('reader-author').textContent = a.author;
+    document.getElementById('reader-ava').textContent = a.authorInitials;
+    document.getElementById('reader-source').textContent = a.source;
+    document.getElementById('reader-domain').textContent = a.domain;
+    document.getElementById('reader-time-left').textContent = `${a.readTime} min`;
+
+    const hero = document.querySelector('.hero-figure');
+    hero.style.background =
+      `radial-gradient(60% 60% at 70% 30%, color-mix(in oklch, oklch(60% 0.16 ${a.hue}) 38%, transparent), transparent 70%),
+       radial-gradient(50% 50% at 20% 80%, color-mix(in oklch, var(--teal) 30%, transparent), transparent 70%),
+       linear-gradient(135deg, oklch(35% 0.06 ${a.hue}), oklch(22% 0.04 ${a.hue}))`;
+
+    document.body.dataset.view = 'reader';
+    window.scrollTo(0, 0);
+    saveState();
+  }
+
+  function backToList(){
+    document.body.dataset.view = 'library';
+    window.scrollTo(0, 0);
+    saveState();
+  }
+
+  document.getElementById('back-to-list').addEventListener('click', backToList);
+  document.querySelector('.resume-card').addEventListener('click', () => openReader('a06'));
+
+  document.querySelectorAll('.list-controls .pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('.list-controls .pill').forEach(x => x.classList.remove('is-on'));
+      p.classList.add('is-on');
+    });
+  });
+
+  /* reader scroll progress */
+  function onScroll(){
+    if (document.body.dataset.view !== 'reader') return;
+    const h = document.documentElement;
+    const pct = Math.min(100, Math.max(0, Math.round((h.scrollTop / (h.scrollHeight - h.clientHeight || 1)) * 100)));
+    document.getElementById('reader-progress-pct').textContent = pct + '%';
+    document.getElementById('reader-progress-bar').style.width = pct + '%';
+  }
+  window.addEventListener('scroll', onScroll);
+
+  /* tweaks */
+  function applyState(){
+    root.style.setProperty('--accent',      `oklch(53% ${state.accentC} ${state.accentH})`);
+    root.style.setProperty('--accent-ink',  `oklch(38% ${state.accentC * 0.95} ${state.accentH})`);
+    root.style.setProperty('--accent-soft', `oklch(94.5% ${state.accentC * 0.18} ${state.accentH})`);
+    if (state.dark) {
+      root.classList.add('dark');
+      root.style.setProperty('--accent',      `oklch(70% ${state.accentC * 0.9} ${state.accentH + 2})`);
+      root.style.setProperty('--accent-ink',  `oklch(82% ${state.accentC * 0.65} ${state.accentH + 2})`);
+      root.style.setProperty('--accent-soft', `oklch(28% ${state.accentC * 0.42} ${state.accentH})`);
+    } else {
+      root.classList.remove('dark');
+    }
+    root.dataset.density = state.density;
+    root.style.setProperty('--reader-width', state.readerWidth + 'px');
+    document.querySelectorAll('#tw-accent button').forEach(b => b.classList.toggle('is-on', +b.dataset.h === state.accentH));
+    document.querySelectorAll('#tw-density button').forEach(b => b.classList.toggle('is-on', b.dataset.d === state.density));
+    document.getElementById('tw-dark').classList.toggle('is-on', state.dark);
+    document.getElementById('tw-dark').textContent = state.dark ? 'On' : 'Off';
+    document.getElementById('tw-width').value = state.readerWidth;
+  }
+  function saveState(){
+    localStorage.setItem('wallabag-tweaks', JSON.stringify(state));
+    localStorage.setItem('wallabag-view', JSON.stringify({view:document.body.dataset.view}));
+  }
+  document.querySelectorAll('#tw-accent button').forEach(b => {
+    b.addEventListener('click', () => { state.accentH = +b.dataset.h; state.accentC = +b.dataset.c; applyState(); saveState(); });
+  });
+  document.querySelectorAll('#tw-density button').forEach(b => {
+    b.addEventListener('click', () => { state.density = b.dataset.d; applyState(); saveState(); });
+  });
+  document.getElementById('tw-dark').addEventListener('click', () => { state.dark = !state.dark; applyState(); saveState(); });
+  document.getElementById('tw-width').addEventListener('input', e => { state.readerWidth = +e.target.value; applyState(); saveState(); });
+  document.getElementById('tweaks-toggle').addEventListener('click', () => document.getElementById('tweaks').classList.toggle('is-open'));
+  document.addEventListener('click', e => {
+    const tw = document.getElementById('tweaks');
+    if (!tw.classList.contains('is-open')) return;
+    if (e.target.closest('#tweaks') || e.target.closest('#tweaks-toggle')) return;
+    tw.classList.remove('is-open');
+  });
+
+  /* restore */
+  try {
+    const saved = JSON.parse(localStorage.getItem('wallabag-view') || 'null');
+    if (saved && saved.view === 'reader') document.body.dataset.view = 'reader';
+  } catch (e) {}
+
+  renderList();
+  applyState();
+  onScroll();
+
+  /* ===== TOAST ===== */
+  let toastTimer = null;
+  function toast(msg, undoFn){
+    const t = document.getElementById('toast');
+    document.getElementById('toast-msg').textContent = msg;
+    const u = document.getElementById('toast-undo');
+    if (undoFn) {
+      u.style.display = 'inline';
+      u.onclick = () => { undoFn(); t.classList.remove('is-on'); };
+    } else {
+      u.style.display = 'none';
+    }
+    t.classList.add('is-on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('is-on'), 3200);
+  }
+
+  /* ===== SAVE MODAL ===== */
+  const saveBack = document.getElementById('save-back');
+  function openSave(){
+    saveBack.classList.add('is-open');
+    setStage('paste');
+    setTimeout(() => document.getElementById('save-url').focus(), 50);
+  }
+  function closeSave(){ saveBack.classList.remove('is-open'); document.getElementById('save-url').value = ''; }
+  function setStage(name){
+    saveBack.querySelectorAll('.save-stage').forEach(s => s.classList.toggle('is-on', s.dataset.stage === name));
+  }
+  document.getElementById('save-btn').addEventListener('click', openSave);
+  document.getElementById('add-url-btn').addEventListener('click', openSave);
+  document.getElementById('add-url-btn-mob').addEventListener('click', openSave);
+  document.getElementById('save-close-1').addEventListener('click', closeSave);
+  document.getElementById('save-close-2').addEventListener('click', closeSave);
+  document.getElementById('save-cancel-1').addEventListener('click', closeSave);
+  document.getElementById('save-cancel-2').addEventListener('click', closeSave);
+  document.getElementById('save-fetch').addEventListener('click', () => {
+    setStage('loading');
+    setTimeout(() => setStage('confirm'), 850);
+  });
+  document.getElementById('save-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('save-fetch').click();
+  });
+  document.getElementById('save-confirm').addEventListener('click', () => {
+    closeSave();
+    toast('Saved to library', () => toast('Removed from library'));
+  });
+  document.getElementById('picker-tags').addEventListener('click', e => {
+    const t = e.target.closest('.ptag'); if (t) t.classList.toggle('is-on');
+  });
+  document.getElementById('new-tag-btn').addEventListener('click', e => {
+    const btn = e.currentTarget;
+    const inp = document.createElement('input');
+    inp.className = 'new-tag-input';
+    inp.placeholder = 'tag name…';
+    inp.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' && inp.value.trim()) {
+        const tag = document.createElement('button');
+        tag.className = 'ptag is-on';
+        tag.innerHTML = `<span class="dot" style="background:oklch(60% 0.18 ${Math.random()*360|0})"></span>${inp.value.trim()}`;
+        btn.parentNode.insertBefore(tag, btn);
+        inp.remove(); btn.style.display = '';
+      } else if (ev.key === 'Escape') { inp.remove(); btn.style.display = ''; }
+    });
+    btn.style.display = 'none';
+    btn.parentNode.insertBefore(inp, btn);
+    inp.focus();
+  });
+  saveBack.addEventListener('click', e => { if (e.target === saveBack) closeSave(); });
+
+  /* ===== SEARCH PALETTE ===== */
+  const paletteBack = document.getElementById('palette-back');
+  const paletteInput = document.getElementById('palette-input');
+  const paletteResults = document.getElementById('palette-results');
+  let paletteFilter = 'all';
+  let paletteCursor = 0;
+
+  const palData = [
+    ...articles.map(a => ({type:'article', id:a.id, title:a.title, meta:`${a.domain} · ${a.readTime} min · ${a.author}`, body:a.excerpt})),
+    {type:'tag', id:'longreads', title:'longreads', meta:'42 articles · most-tagged'},
+    {type:'tag', id:'philosophy', title:'philosophy', meta:'18 articles'},
+    {type:'highlight', id:'h1', title:'"Real libraries are mostly unread shelves."', meta:'in The Library You Carry · aeon.co'},
+    {type:'highlight', id:'h2', title:'"Slowness is a small act of disrespect for the people who use what you make."', meta:'in Fast software · craigmod.com'},
+    {type:'highlight', id:'h3', title:'"A backlog is a self-portrait, drawn slowly, by accident."', meta:'in The Library You Carry · aeon.co'},
+    {type:'author', id:'craig-mod', title:'Craig Mod', meta:'1 article in your library · craigmod.com'}
+  ];
+
+  function escapeHtml(s){return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);}
+  function highlightMatch(text, q){
+    if (!q) return escapeHtml(text);
+    const safe = escapeHtml(text);
+    const safeQ = escapeHtml(q).replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    return safe.replace(new RegExp(`(${safeQ})`, 'ig'), '<mark>$1</mark>');
+  }
+  function renderPalette(){
+    const q = paletteInput.value.trim().toLowerCase();
+    const filtered = palData.filter(d => {
+      if (paletteFilter !== 'all' && d.type !== paletteFilter) return false;
+      if (!q) return true;
+      return d.title.toLowerCase().includes(q) || (d.meta||'').toLowerCase().includes(q) || (d.body||'').toLowerCase().includes(q);
+    });
+    if (!filtered.length) {
+      paletteResults.innerHTML = `<div class="palette-empty">No results for <strong>"${escapeHtml(q)}"</strong>.<br><span style="color:var(--subtle);font-size:12.5px">Try fewer words, or check your spelling.</span></div>`;
+      return;
+    }
+    const groups = {article:[], tag:[], highlight:[], author:[]};
+    filtered.forEach(d => groups[d.type].push(d));
+    const labels = {article:'Articles', tag:'Tags', highlight:'Highlights', author:'Authors'};
+    let html = '';
+    let idx = 0;
+    Object.keys(groups).forEach(k => {
+      if (!groups[k].length) return;
+      html += `<div class="palette-group"><h5>${labels[k]}</h5>`;
+      groups[k].forEach(d => {
+        const cursor = idx === paletteCursor ? 'is-cursor' : '';
+        const icon = d.type === 'article' ? `<div class="pres-icon">${escapeHtml((d.title||'?').charAt(0))}</div>`
+                   : d.type === 'tag' ? `<div class="pres-icon tag-ic">#</div>`
+                   : d.type === 'highlight' ? `<div class="pres-icon hl-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14 6-6m-3-3 5 5-9 9H3v-5z"/></svg></div>`
+                   : `<div class="pres-icon">${escapeHtml((d.title||'?').match(/\b\w/g).slice(0,2).join(''))}</div>`;
+        html += `<div class="pres ${cursor}" data-idx="${idx}" data-type="${d.type}" data-id="${d.id}">${icon}<div class="pres-body"><div class="pres-title">${highlightMatch(d.title, q)}</div><div class="pres-meta">${highlightMatch(d.meta||'', q)}</div></div><span class="pres-kbd">${idx===paletteCursor?'⏎':''}</span></div>`;
+        idx++;
+      });
+      html += `</div>`;
+    });
+    paletteResults.innerHTML = html;
+    paletteResults.querySelectorAll('.pres').forEach(el => {
+      el.addEventListener('click', () => {
+        const t = el.dataset.type, id = el.dataset.id;
+        closePalette();
+        if (t === 'article' || t === 'highlight') {
+          const aId = t === 'article' ? id : 'a01';
+          openReader(aId);
+        } else {
+          toast(`Filtered library by ${t}: ${id}`);
+        }
+      });
+    });
+  }
+  function openPalette(){
+    paletteBack.classList.add('is-open');
+    paletteInput.value = '';
+    paletteCursor = 0;
+    renderPalette();
+    setTimeout(() => paletteInput.focus(), 50);
+  }
+  function closePalette(){ paletteBack.classList.remove('is-open'); }
+  paletteInput.addEventListener('input', () => { paletteCursor = 0; renderPalette(); });
+  paletteInput.addEventListener('keydown', e => {
+    const items = paletteResults.querySelectorAll('.pres');
+    if (e.key === 'ArrowDown') { e.preventDefault(); paletteCursor = Math.min(items.length-1, paletteCursor+1); renderPalette(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); paletteCursor = Math.max(0, paletteCursor-1); renderPalette(); }
+    else if (e.key === 'Enter') { items[paletteCursor]?.click(); }
+  });
+  document.getElementById('palette-filters').addEventListener('click', e => {
+    const f = e.target.closest('.pf'); if (!f) return;
+    document.querySelectorAll('#palette-filters .pf').forEach(x => x.classList.remove('is-on'));
+    f.classList.add('is-on');
+    paletteFilter = f.dataset.f;
+    paletteCursor = 0;
+    renderPalette();
+  });
+  paletteBack.addEventListener('click', e => { if (e.target === paletteBack) closePalette(); });
+  document.getElementById('masthead-search').addEventListener('click', openPalette);
+  document.getElementById('masthead-search').addEventListener('focus', openPalette);
+
+  /* ===== HIGHLIGHTS & NOTES ===== */
+  const userNotes = [];  // {id, quote, text, ts}
+  let activeNoteEl = null;
+
+  function refreshNotesUI(){
+    const n = userNotes.length;
+    document.getElementById('reader-notes-count').textContent = n ? n : '';
+    document.getElementById('notes-count').textContent = n ? `· ${n}` : '· 0';
+    const list = document.getElementById('notes-list');
+    if (!n) {
+      list.innerHTML = `<p style="padding:24px;color:var(--subtle);font-size:13px;text-align:center">Select any text to highlight or annotate.</p>`;
+      return;
+    }
+    list.innerHTML = userNotes.map(note => `
+      <div class="note-card" data-note="${note.id}">
+        <div class="note-quote">${escapeHtml(note.quote.slice(0,140))}${note.quote.length>140?'…':''}</div>
+        ${note.text ? `<div class="note-text">${escapeHtml(note.text)}</div>` : '<div class="note-text" style="color:var(--subtle);font-style:italic">no note · click to add</div>'}
+        <div class="note-meta">${note.ts}</div>
+      </div>
+    `).join('');
+    list.querySelectorAll('.note-card').forEach(c => {
+      c.addEventListener('click', () => {
+        const note = userNotes.find(n => n.id === c.dataset.note);
+        if (!note) return;
+        const cur = c.querySelector('.note-text');
+        const ta = document.createElement('textarea');
+        ta.className = 'note-text-input';
+        ta.value = note.text;
+        ta.placeholder = 'Add a note…';
+        cur.replaceWith(ta);
+        ta.focus();
+        ta.addEventListener('blur', () => {
+          note.text = ta.value;
+          refreshNotesUI();
+        });
+      });
+    });
+  }
+
+  function applyHighlight(kind){
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const text = sel.toString().trim();
+    if (!text) return;
+    if (!document.querySelector('#article').contains(range.commonAncestorContainer)) return;
+    const id = 'n'+Date.now();
+    const mark = document.createElement('mark');
+    mark.className = kind === 'note' ? 'hl-note' : 'hl-user';
+    mark.dataset.note = id;
+    try {
+      mark.appendChild(range.extractContents());
+      range.insertNode(mark);
+    } catch(err) {
+      mark.textContent = text;
+      try { range.deleteContents(); range.insertNode(mark); } catch(_){}
+    }
+    sel.removeAllRanges();
+    userNotes.push({id, quote:text, text:'', ts:'just now'});
+    if (kind === 'note') {
+      document.body.dataset.notes = '1';
+      setTimeout(() => {
+        const card = document.querySelector(`[data-note="${id}"]`);
+        card?.click();
+      }, 50);
+    }
+    refreshNotesUI();
+    toast(kind === 'note' ? 'Highlight saved · open notes panel' : 'Highlight saved');
+    document.getElementById('hl-bubble').classList.remove('is-open');
+  }
+
+  document.getElementById('article').addEventListener('mouseup', () => {
+    setTimeout(() => {
+      const sel = window.getSelection();
+      const bubble = document.getElementById('hl-bubble');
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) { bubble.classList.remove('is-open'); return; }
+      if (!document.getElementById('article').contains(sel.anchorNode)) { bubble.classList.remove('is-open'); return; }
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      bubble.style.left = (r.left + r.width/2 + window.scrollX) + 'px';
+      bubble.style.top = (r.top + window.scrollY) + 'px';
+      bubble.classList.add('is-open');
+    }, 10);
+  });
+  document.addEventListener('mousedown', e => {
+    if (!e.target.closest('#hl-bubble') && !e.target.closest('#article')) {
+      document.getElementById('hl-bubble').classList.remove('is-open');
+    }
+  });
+  document.getElementById('hl-bubble').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const kind = b.dataset.hl;
+    if (kind === 'highlight' || kind === 'note') applyHighlight(kind);
+    else if (kind === 'copy') {
+      const text = window.getSelection().toString();
+      navigator.clipboard?.writeText(text);
+      toast('Copied to clipboard');
+      document.getElementById('hl-bubble').classList.remove('is-open');
+    }
+  });
+  document.getElementById('reader-notes-btn').addEventListener('click', () => {
+    document.body.dataset.notes = document.body.dataset.notes === '1' ? '0' : '1';
+  });
+  document.getElementById('notes-close').addEventListener('click', () => { document.body.dataset.notes = '0'; });
+
+  /* ===== BULK SELECT ===== */
+  const selected = new Set();
+  function toggleSelect(id){
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+    document.body.dataset.select = selected.size ? '1' : '0';
+    document.getElementById('sel-count').textContent = selected.size;
+    document.querySelectorAll('.row').forEach(r => {
+      const on = selected.has(r.dataset.id);
+      r.classList.toggle('is-selected', on);
+      const c = r.querySelector('.row-check');
+      if (c) c.classList.toggle('is-on', on);
+    });
+  }
+  function clearSelection(){ selected.clear(); document.body.dataset.select = '0'; document.querySelectorAll('.row.is-selected').forEach(r => r.classList.remove('is-selected')); document.querySelectorAll('.row-check.is-on').forEach(c => c.classList.remove('is-on')); }
+  document.getElementById('sel-cancel').addEventListener('click', clearSelection);
+  document.querySelectorAll('.selection-bar [data-bulk]').forEach(b => {
+    b.addEventListener('click', () => {
+      const n = selected.size;
+      const action = b.dataset.bulk;
+      const labels = {star:'Starred', archive:'Archived', tag:'Tagged', delete:'Deleted'};
+      clearSelection();
+      toast(`${labels[action]} ${n} article${n>1?'s':''}`, () => toast(`Restored ${n} article${n>1?'s':''}`));
+    });
+  });
+
+  /* ===== DEMO STATE TOGGLES ===== */
+  const errorRow = { id:'err1', glyph:'!', domain:'medium.com', title:'Members-only article', error:true, savedAt:'just now' };
+  let baseArticles = [...articles];
+
+  document.querySelectorAll('#tw-state button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#tw-state button').forEach(x => x.classList.remove('is-on'));
+      b.classList.add('is-on');
+      const st = b.dataset.st;
+      articles.length = 0;
+      if (st === 'normal') articles.push(...baseArticles);
+      else if (st === 'empty') articles.push(...baseArticles);
+      else if (st === 'error') articles.push(errorRow, ...baseArticles);
+      document.body.dataset.empty = st === 'empty' ? '1' : '0';
+      renderList();
+    });
+  });
+  document.querySelectorAll('#tw-conn button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#tw-conn button').forEach(x => x.classList.remove('is-on'));
+      b.classList.add('is-on');
+      document.body.dataset.offline = b.dataset.c === 'offline' ? '1' : '0';
+    });
+  });
+  document.querySelector('.offline-banner .retry').addEventListener('click', () => {
+    document.body.dataset.offline = '0';
+    document.querySelectorAll('#tw-conn button').forEach(x => x.classList.toggle('is-on', x.dataset.c === 'online'));
+    toast('Reconnected · syncing 3 articles');
+  });
+
+  /* ===== KEYBOARD ===== */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (paletteBack.classList.contains('is-open')) return closePalette();
+      if (saveBack.classList.contains('is-open')) return closeSave();
+      if (selected.size) return clearSelection();
+      if (document.body.dataset.notes === '1') return document.body.dataset.notes = '0';
+      if (document.body.dataset.view === 'reader') return backToList();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openPalette(); }
+    if (e.key === '/' && document.body.dataset.view === 'library' && !e.target.closest('input, textarea')) { e.preventDefault(); openPalette(); }
+    if (e.key === 'j' && document.body.dataset.view === 'library' && !e.target.closest('input, textarea')) {
+      const rows = document.querySelectorAll('.row:not(.is-error)');
+      if (rows.length) openReader(rows[0].dataset.id);
+    }
+  });
+
+  refreshNotesUI();
+</script>
+</body>
+</html>

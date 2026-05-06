@@ -48,6 +48,14 @@ Phase 5a (Add by URL) complete:
 - Web bookmarklet (drag to bookmarks bar) in Settings → Save shortcuts
 - Optimistic create via the Phase-2 outbox: appears in the library immediately, server fetches the body in the background
 
+Phase 4b (Annotations) complete:
+
+- Render existing annotations as highlights on article load
+- Select text → "Highlight" toolbar → tap to create a new highlight
+- Tap a highlight → bottom sheet to read the quote, edit a note, or delete
+- All operations optimistic via the Phase-2 outbox; offline-friendly
+- XPath range serializer (single-block ranges) — heavily unit-tested
+
 Native share targets (iOS share extension, Android intent filter) and the release pipeline arrive in later phases.
 
 ## Develop

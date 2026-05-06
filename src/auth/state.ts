@@ -2,6 +2,7 @@ import { kvSet, kvGet, kvRemove } from "@/lib/async-storage";
 import { secureSet, secureGet } from "@/auth/storage";
 import { applyTokenBundle, clearTokens } from "@/auth/tokens";
 import type { TokenBundle } from "@/api/types";
+import { clearAllData, resetDb } from "@/db";
 
 export type AuthState =
   | { status: "unknown"; serverUrl: null }
@@ -57,6 +58,8 @@ export async function signIn(args: {
 }
 
 export async function signOut(): Promise<void> {
+  await clearAllData();
+  await resetDb();
   await clearTokens();
   await kvRemove("server_url");
   await kvRemove("last_user_id");

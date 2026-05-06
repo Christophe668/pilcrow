@@ -33,3 +33,18 @@ export async function resetDb(): Promise<void> {
 export function setDbForTesting(driver: DbDriver | null): void {
   cached = driver ? Promise.resolve(driver) : null;
 }
+
+export async function clearAllData(): Promise<void> {
+  if (!cached) return;
+  const driver = await cached;
+  await driver.transaction(async (tx) => {
+    await tx.exec(`
+      DELETE FROM article_tags;
+      DELETE FROM annotations;
+      DELETE FROM tags;
+      DELETE FROM articles;
+      DELETE FROM outbox;
+      DELETE FROM sync_state;
+    `);
+  });
+}

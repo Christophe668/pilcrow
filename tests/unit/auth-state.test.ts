@@ -59,4 +59,36 @@ describe("auth state", () => {
     expect(authStore.get().status).toBe("unauthenticated");
     expect(secure.size).toBe(0);
   });
+
+  it("signOut closes SQLite driver", async () => {
+    const { setDbForTesting } = await import("@/db");
+    const closed = vi.fn();
+    setDbForTesting({
+      exec: vi.fn(),
+      run: vi.fn(),
+      get: vi.fn(),
+      all: vi.fn(),
+      transaction: vi.fn(async (cb) =>
+        cb({
+          exec: vi.fn(),
+          run: vi.fn(),
+          get: vi.fn(),
+          all: vi.fn(),
+          transaction: vi.fn(),
+          close: vi.fn(),
+        } as never),
+      ),
+      close: closed,
+    } as never);
+
+    await signIn({
+      serverUrl: "https://wb.test",
+      clientId: "cid",
+      clientSecret: "cs",
+      username: "u",
+      bundle: { access_token: "at", refresh_token: "rt", expires_in: 3600, token_type: "bearer" },
+    });
+    await signOut();
+    expect(closed).toHaveBeenCalled();
+  });
 });

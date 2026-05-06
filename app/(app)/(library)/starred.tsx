@@ -5,8 +5,8 @@ import { ArticleList } from "@/components/ArticleList";
 import { useArticles } from "@/hooks/useArticles";
 import { useSyncNow } from "@/hooks/useSyncNow";
 
-export default function UnreadRoute() {
-  const articles = useArticles("unread");
+export default function StarredRoute() {
+  const articles = useArticles("starred");
   const sync = useSyncNow();
   const [pulling, setPulling] = useState(false);
   const onRefresh = async () => {
@@ -19,14 +19,14 @@ export default function UnreadRoute() {
   };
   return (
     <View className="flex-1">
-      <LibraryHeader title="Unread" {...(articles.data ? { count: articles.data.length } : {})} />
+      <LibraryHeader title="Starred" {...(articles.data ? { count: articles.data.length } : {})} />
       <ArticleList
         articles={articles.data ?? []}
         loading={articles.isLoading}
         refreshing={pulling}
         onRefresh={onRefresh}
-        emptyTitle="No unread articles"
-        emptyDescription="Articles you save show up here. Pull down to sync."
+        emptyTitle="Nothing starred"
+        emptyDescription="Tap the star on any article to bookmark it."
       />
     </View>
   );

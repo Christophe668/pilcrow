@@ -46,6 +46,25 @@ describe("ArticleCard", () => {
     expect(screen.getByLabelText("starred")).toBeTruthy();
   });
 
+  it("renders the excerpt when provided", () => {
+    render(
+      <ArticleCard
+        id={1}
+        title="Title"
+        url="https://example.com/x"
+        domain="example.com"
+        readingTime={5}
+        isStarred={false}
+        isArchived={false}
+        updatedAt={null}
+        previewImage={null}
+        tags={[]}
+        excerpt="<p>Hello <b>world</b>, this is the body.</p>"
+      />,
+    );
+    expect(screen.getByText(/Hello world\s*,? this is the body/)).toBeTruthy();
+  });
+
   it("falls back to URL when title is null", () => {
     render(
       <ArticleCard

@@ -51,6 +51,7 @@ export function ArticleList({
           updatedAt={item.updated_at}
           previewImage={item.preview_picture}
           tags={item.tags}
+          excerpt={item.content}
         />
       )}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

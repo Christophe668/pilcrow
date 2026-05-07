@@ -33,8 +33,23 @@ class Store {
 export const authStore = new Store();
 
 export async function hydrateAuth(): Promise<void> {
-  const serverUrl = await kvGet("server_url");
-  const access = await secureGet("access_token");
+  // Read token + server URL defensively. On native, expo-secure-store can
+  // throw if the Android Keystore is in a weird state, the native module
+  // hasn't been linked, or the user reinstalled the app under a different
+  // signing key. Any failure here should land the user on the sign-in
+  // screen rather than an infinite blank loader.
+  let serverUrl: string | null = null;
+  let access: string | null = null;
+  try {
+    serverUrl = await kvGet("server_url");
+  } catch {
+    serverUrl = null;
+  }
+  try {
+    access = await secureGet("access_token");
+  } catch {
+    access = null;
+  }
   if (access && serverUrl) {
     authStore.set({ status: "authenticated", serverUrl });
   } else {

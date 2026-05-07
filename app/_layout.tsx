@@ -47,10 +47,38 @@ export default function RootLayout() {
   const systemScheme = colorScheme === "dark" ? "dark" : "light";
   const { loaded, error } = useAppFonts();
   const [hydrated, setHydrated] = useState(false);
+  const [fontTimeout, setFontTimeout] = useState(false);
+
   useEffect(() => {
-    hydrateAuth().then(() => setHydrated(true));
+    let cancelled = false;
+    hydrateAuth()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setHydrated(true);
+      });
+    // Belt-and-suspenders: even if `hydrateAuth` itself never settles,
+    // unblock the gate after 4 seconds so the app never sits on a blank
+    // splash forever.
+    const safety = setTimeout(() => {
+      if (!cancelled) setHydrated(true);
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
   }, []);
-  if ((!loaded && !error) || !hydrated) return null;
+
+  // expo-font occasionally never resolves on Android when the variable
+  // font file is huge or the network blip stalls — fall through after 4s
+  // so the rest of the app still mounts.
+  useEffect(() => {
+    if (loaded || error) return;
+    const t = setTimeout(() => setFontTimeout(true), 4000);
+    return () => clearTimeout(t);
+  }, [loaded, error]);
+
+  const fontsReady = loaded || error !== null || fontTimeout;
+  if (!fontsReady || !hydrated) return null;
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider initialMode="auto" systemScheme={systemScheme}>

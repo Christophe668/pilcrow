@@ -1,40 +1,19 @@
-import { useState } from "react";
-import { View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { LibraryHeader } from "@/components/LibraryHeader";
-import { ArticleList } from "@/components/ArticleList";
-import { useArticlesByTag } from "@/hooks/useArticlesByTag";
-import { useSyncNow } from "@/hooks/useSyncNow";
+import { useLocalSearchParams, Redirect } from "expo-router";
+import type { Href } from "expo-router";
+import { serializeTagsParam } from "@/lib/tagParams";
 
-export default function TagRoute() {
+/**
+ * Legacy tag-only route. Tags are now an overlay filter rather than their
+ * own destination — when someone hits this URL (deep link, bookmark) we
+ * redirect them to the All view with the tag pre-selected so the new
+ * multi-select UI is the canonical surface.
+ */
+export default function LegacyTagRedirect() {
   const { tag } = useLocalSearchParams<{ tag: string }>();
   const slug = (tag ?? "").toString();
-  const articles = useArticlesByTag(slug);
-  const sync = useSyncNow();
-  const [pulling, setPulling] = useState(false);
-  const onRefresh = async () => {
-    setPulling(true);
-    try {
-      await sync.mutateAsync();
-    } finally {
-      setPulling(false);
-    }
-  };
-  return (
-    <View className="flex-1">
-      <LibraryHeader
-        title={`#${slug}`}
-        activeFilter="tag"
-        {...(articles.data ? { count: articles.data.length } : {})}
-      />
-      <ArticleList
-        articles={articles.data ?? []}
-        loading={articles.isLoading}
-        refreshing={pulling}
-        onRefresh={onRefresh}
-        emptyTitle={`Nothing tagged #${slug}`}
-        emptyDescription="Tagged articles will appear here."
-      />
-    </View>
-  );
+  const tagsParam = serializeTagsParam(slug ? [slug] : []);
+  const href = tagsParam
+    ? (`/(app)/(library)/all?tags=${tagsParam}` as Href)
+    : ("/(app)/(library)/all" as Href);
+  return <Redirect href={href} />;
 }

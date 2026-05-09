@@ -54,6 +54,44 @@ describe("passwordGrant", () => {
       }),
     ).rejects.toThrow(/credentials/i);
   });
+
+  it("surfaces error_description from Wallabag for non-credential 400s", async () => {
+    server.use(
+      http.post("https://wb.test/oauth/v2/token", () =>
+        HttpResponse.json(
+          { error: "invalid_client", error_description: "The client credentials are invalid" },
+          { status: 400 },
+        ),
+      ),
+    );
+    await expect(
+      passwordGrant({
+        serverUrl: "https://wb.test",
+        clientId: "cid",
+        clientSecret: "cs",
+        username: "u",
+        password: "p",
+      }),
+    ).rejects.toThrow(/client credentials are invalid/i);
+  });
+
+  it("falls back to a body snippet when the response isn't JSON", async () => {
+    server.use(
+      http.post(
+        "https://wb.test/oauth/v2/token",
+        () => new HttpResponse("<html>nginx 502</html>", { status: 400 }),
+      ),
+    );
+    await expect(
+      passwordGrant({
+        serverUrl: "https://wb.test",
+        clientId: "cid",
+        clientSecret: "cs",
+        username: "u",
+        password: "p",
+      }),
+    ).rejects.toThrow(/nginx 502/);
+  });
 });
 
 describe("refreshGrant", () => {

@@ -7,6 +7,11 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     globals: true,
+    // Default vitest ignores node_modules and .git, but it picks up everything
+    // else under the cwd. Stale git-worktrees dropped by subagents in
+    // .claude/worktrees/ contain duplicate tests with old code that we don't
+    // want included in our test count.
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.git/**", ".claude/worktrees/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

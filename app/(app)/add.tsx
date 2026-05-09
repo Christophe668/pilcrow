@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCreateEntry } from "@/hooks/useCreateEntry";
 import { extractCandidateUrl } from "@/lib/url";
+import { goBackOrHome } from "@/lib/navigation";
 
 export default function AddRoute() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ url?: string; tags?: string }>();
   const initialUrl = extractCandidateUrl(params.url) ?? "";
   const initialTags = (params.tags ?? "").trim();
@@ -29,20 +32,20 @@ export default function AddRoute() {
       .filter(Boolean);
     try {
       await create.mutateAsync({ url: candidate, tags });
-      router.back();
+      goBackOrHome(router);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
     }
   };
 
   return (
-    <View className="flex-1 bg-bg items-center px-6 pt-16">
+    <View className="flex-1 bg-bg items-center px-6" style={{ paddingTop: insets.top + 24 }}>
       <View className="w-full max-w-[560px]">
         <View className="flex-row items-baseline justify-between mb-6">
           <Text className="font-display text-fg text-3xl">Save article</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.back()}
+            onPress={() => goBackOrHome(router)}
             className="px-2 py-1.5"
           >
             <Text className="text-muted text-sm">Cancel</Text>

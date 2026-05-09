@@ -24,11 +24,17 @@ export function buildReaderHtml(args: BuildReaderArgs): BuiltReader {
   const withCodeBlocks = rewriteCodeBlocks(args.contentHtml);
   const { html: rewritten, pendingSources } = rewriteImages(withCodeBlocks, args.imageLookup);
 
+  // <base> resolves relative anchors and other URLs against the article's
+  // own origin. Without it, `<a href="/foo">` inside a srcDoc iframe (no
+  // location) or a WebView with html-source (about:blank) would fail to
+  // resolve. We also default `target="_blank"` so any unintercepted nav
+  // attempts at least try to break out.
   const doc = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<base href="${escapeHtml(args.url)}" target="_blank">
 <title>${escapeHtml(args.title ?? args.url)}</title>
 ${readerStylesTag(args.prefs)}
 </head>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Link, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "@/auth/state";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
@@ -22,6 +23,7 @@ function relativeTime(iso: string | null): string {
 export default function Settings() {
   const auth = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const status = useSyncStatus();
   const sync = useSyncNow();
   const [signingOut, setSigningOut] = useState(false);
@@ -39,7 +41,7 @@ export default function Settings() {
   const host = auth.status === "authenticated" ? new URL(auth.serverUrl).host : "—";
 
   return (
-    <View className="flex-1 bg-bg items-center pt-16 px-6">
+    <View className="flex-1 bg-bg items-center px-6" style={{ paddingTop: insets.top + 24 }}>
       <View className="w-full max-w-[680px]">
         <Text className="font-display text-fg text-3xl mb-6">Settings</Text>
 

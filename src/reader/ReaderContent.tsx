@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 
 export type SerializedRange = {
@@ -13,6 +13,7 @@ export type BridgeMessage =
   | { kind: "ready" }
   | { kind: "selection"; text: string; ranges: SerializedRange }
   | { kind: "selection-cleared" }
+  | { kind: "link-click"; url: string }
   | { kind: "annotation:click"; id: number }
   | { kind: "annotation:created"; tempId: number; success: boolean }
   | { kind: "annotation:render-warning"; id: number; reason: string };
@@ -56,6 +57,9 @@ function parseMsg(raw: unknown): BridgeMessage | null {
       };
     }
     if (kind === "selection-cleared") return { kind: "selection-cleared" };
+    if (kind === "link-click" && typeof o["url"] === "string") {
+      return { kind: "link-click", url: o["url"] };
+    }
     if (kind === "annotation:click" && typeof o["id"] === "number") {
       return { kind: "annotation:click", id: o["id"] };
     }
@@ -75,6 +79,18 @@ function parseMsg(raw: unknown): BridgeMessage | null {
   }
 }
 
+function openExternally(url: string) {
+  if (Platform.OS === "web") {
+    // _blank + noopener so the linked page can't reach back into the
+    // reader window, and rel='noreferrer' keeps the source URL private.
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    return;
+  }
+  void Linking.openURL(url).catch(() => undefined);
+}
+
 function dispatch(msg: BridgeMessage, props: ReaderContentProps) {
   switch (msg.kind) {
     case "scroll":
@@ -85,6 +101,13 @@ function dispatch(msg: BridgeMessage, props: ReaderContentProps) {
       return;
     case "selection-cleared":
       props.onSelectionCleared?.();
+      return;
+    case "link-click":
+      // Anchor clicks always open externally — the in-iframe iframe is
+      // sandboxed (no top-navigation) and the native WebView would
+      // otherwise replace the article body with the linked page. Either
+      // way, the user wants the system browser.
+      openExternally(msg.url);
       return;
     case "annotation:click":
       props.onAnnotationClick?.(msg.id);
@@ -175,6 +198,17 @@ const ReaderContentNative = forwardRef<ReaderContentHandle, ReaderContentProps>(
         style={{ flex: 1, backgroundColor: "transparent" }}
         javaScriptEnabled
         domStorageEnabled={false}
+        // Belt and suspenders: the bridge intercepts anchor clicks via JS,
+        // but if anything slips through (e.g. JS-driven location changes,
+        // form posts), don't let the WebView navigate away from the
+        // article. Open it externally instead.
+        onShouldStartLoadWithRequest={(req) => {
+          // The initial load is `about:blank` (RN's html-source default)
+          // — let that through. Any other navigation we redirect.
+          if (req.url === "about:blank" || req.url.startsWith("data:")) return true;
+          openExternally(req.url);
+          return false;
+        }}
         onMessage={(e) => {
           const msg = parseMsg(e.nativeEvent.data);
           if (!msg) return;

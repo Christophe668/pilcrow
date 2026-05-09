@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { LibraryHeader } from "@/components/LibraryHeader";
 import { ArticleList } from "@/components/ArticleList";
 import { useArticles } from "@/hooks/useArticles";
 import { useSyncNow } from "@/hooks/useSyncNow";
+import { parseTagsParam } from "@/lib/tagParams";
 
 export default function AllRoute() {
-  const articles = useArticles("all");
+  const params = useLocalSearchParams<{ tags?: string | string[] }>();
+  const tagSlugs = parseTagsParam(params.tags);
+  const articles = useArticles("all", tagSlugs);
   const sync = useSyncNow();
   const [pulling, setPulling] = useState(false);
   const onRefresh = async () => {
@@ -22,6 +26,7 @@ export default function AllRoute() {
       <LibraryHeader
         title="All"
         activeFilter="all"
+        activeTags={tagSlugs}
         {...(articles.data ? { count: articles.data.length } : {})}
       />
       <ArticleList
@@ -29,8 +34,15 @@ export default function AllRoute() {
         loading={articles.isLoading}
         refreshing={pulling}
         onRefresh={onRefresh}
-        emptyTitle="Library is empty"
-        emptyDescription="Save your first article from your wallabag server, then sync."
+        emptyTitle={tagSlugs.length > 0 ? "Nothing matches" : "Library is empty"}
+        emptyDescription={
+          tagSlugs.length > 0
+            ? "No articles in your library carry every selected tag."
+            : "Save your first article and it'll land here."
+        }
+        emptyAction={
+          tagSlugs.length > 0 ? undefined : { label: "Save an article", href: "/(app)/add" }
+        }
       />
     </View>
   );

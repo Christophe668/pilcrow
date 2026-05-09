@@ -1,5 +1,7 @@
 import { secureGet } from "@/auth/storage";
 import { ensureFreshToken } from "@/auth/tokens";
+import { signOut } from "@/auth/state";
+import { InvalidCredentialsError } from "@/auth/oauth";
 import { kvGet } from "@/lib/async-storage";
 
 export type RequestArgs = {
@@ -18,6 +20,20 @@ export class ApiError extends Error {
   ) {
     super(`API ${status} ${path}`);
     this.name = "ApiError";
+  }
+}
+
+/**
+ * Thrown when the access token can't be refreshed because the refresh
+ * token is no longer valid (server returned `invalid_grant`). The session
+ * is unrecoverable — the caller should let the auth gate route the user
+ * back to sign-in. The api client signs out before throwing so the
+ * `authStore` flips to "unauthenticated" and the route guard kicks in.
+ */
+export class SessionExpiredError extends Error {
+  constructor() {
+    super("Session expired — please sign in again");
+    this.name = "SessionExpiredError";
   }
 }
 
@@ -56,19 +72,28 @@ async function send(args: RequestArgs, token: string): Promise<Response> {
 
 export async function request<T>(args: RequestArgs): Promise<T> {
   const { clientId, clientSecret } = await readClientCreds();
-  let token = await ensureFreshToken({
-    serverUrl: args.serverUrl,
-    clientId,
-    clientSecret,
-  });
-  let res = await send(args, token);
-  if (res.status === 401) {
+  let token: string;
+  try {
     token = await ensureFreshToken({
       serverUrl: args.serverUrl,
       clientId,
       clientSecret,
-      force: true,
     });
+  } catch (e) {
+    throw await mapTokenError(e);
+  }
+  let res = await send(args, token);
+  if (res.status === 401) {
+    try {
+      token = await ensureFreshToken({
+        serverUrl: args.serverUrl,
+        clientId,
+        clientSecret,
+        force: true,
+      });
+    } catch (e) {
+      throw await mapTokenError(e);
+    }
     res = await send(args, token);
   }
   if (!res.ok) {
@@ -76,6 +101,20 @@ export async function request<T>(args: RequestArgs): Promise<T> {
     throw new ApiError(res.status, args.path, text);
   }
   return (await res.json()) as T;
+}
+
+/**
+ * If the token endpoint reports the refresh token is no longer valid, the
+ * session is unrecoverable. Sign out so the auth gate routes the user
+ * back to login, and surface a structured error so callers can show a
+ * friendly message instead of "invalid credentials" mid-action.
+ */
+async function mapTokenError(e: unknown): Promise<unknown> {
+  if (e instanceof InvalidCredentialsError) {
+    await signOut().catch(() => undefined);
+    return new SessionExpiredError();
+  }
+  return e;
 }
 
 export async function authedRequest<T>(args: Omit<RequestArgs, "serverUrl">): Promise<T> {

@@ -18,8 +18,9 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
   },
 }));
 
-import { request } from "@/api/client";
+import { request, SessionExpiredError } from "@/api/client";
 import { applyTokenBundle } from "@/auth/tokens";
+import { authStore } from "@/auth/state";
 
 beforeEach(async () => {
   secure.clear();
@@ -76,5 +77,26 @@ describe("api request()", () => {
     });
     expect(r.appname).toBe("wallabag");
     expect(calls).toBe(2);
+  });
+
+  it("signs the user out and throws SessionExpiredError when refresh fails with invalid_grant", async () => {
+    // The original request returns 401, the forced refresh call returns
+    // 400 invalid_grant — the user's refresh token is dead. The client
+    // should detect this, sign out (so the auth gate routes back to
+    // login), and throw SessionExpiredError so the caller can avoid a
+    // misleading "Invalid credentials" toast.
+    authStore.set({ status: "authenticated", serverUrl: "https://wb.test" });
+    server.use(
+      http.post("https://wb.test/oauth/v2/token", () =>
+        HttpResponse.json({ error: "invalid_grant" }, { status: 400 }),
+      ),
+      http.get("https://wb.test/api/info.json", () =>
+        HttpResponse.json({ error: "expired" }, { status: 401 }),
+      ),
+    );
+    await expect(
+      request({ serverUrl: "https://wb.test", method: "GET", path: "/api/info.json" }),
+    ).rejects.toBeInstanceOf(SessionExpiredError);
+    expect(authStore.get().status).toBe("unauthenticated");
   });
 });

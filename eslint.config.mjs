@@ -9,7 +9,15 @@ export default tseslint.config(
   ...expoConfig,
   prettier,
   {
-    ignores: ["node_modules/", "ios/", "android/", ".expo/", "dist/", "tests/coverage/"],
+    ignores: [
+      "node_modules/",
+      "ios/",
+      "android/",
+      ".expo/",
+      ".claude/",
+      "dist/",
+      "tests/coverage/",
+    ],
   },
   {
     rules: {

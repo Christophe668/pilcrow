@@ -57,3 +57,16 @@ export async function updateEntry(
 export async function deleteEntry(id: number): Promise<void> {
   await authedRequest<unknown>({ method: "DELETE", path: `/api/entries/${id}.json` });
 }
+
+/**
+ * Asks the server to re-fetch the entry's URL and re-run extraction.
+ * Useful when the original fetch landed on a Cloudflare challenge or
+ * temporary outage. Returns the updated entry with refreshed `content`,
+ * `title`, and `reading_time`.
+ */
+export async function reloadEntry(id: number): Promise<Entry> {
+  return authedRequest<Entry>({
+    method: "PATCH",
+    path: `/api/entries/${id}/reload.json`,
+  });
+}

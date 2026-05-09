@@ -34,13 +34,14 @@ describe("ArticleCard", () => {
     });
     expect(screen.getByText("Hello world")).toBeTruthy();
     expect(screen.getByText(/example.com/)).toBeTruthy();
-    expect(screen.getByText("tech")).toBeTruthy();
+    // Tags now render with a leading `#` as an italic section label.
+    expect(screen.getByText(/#tech/)).toBeTruthy();
   });
 
-  it("renders the star indicator when starred", () => {
+  it("renders the inline star indicator when starred", () => {
     renderCard({
       id: 1,
-      title: "x",
+      title: "Hello",
       url: "https://x",
       domain: "x",
       readingTime: null,
@@ -50,7 +51,9 @@ describe("ArticleCard", () => {
       previewImage: null,
       tags: [],
     });
-    expect(screen.getByLabelText("unstar")).toBeTruthy();
+    // The card no longer exposes a star toggle; it shows a small ★ glyph in
+    // the meta line as an indicator. Action lives in the article reader.
+    expect(screen.getByText("★")).toBeTruthy();
   });
 
   it("renders the excerpt when provided", () => {
@@ -83,7 +86,8 @@ describe("ArticleCard", () => {
       previewImage: "https://example.com/preview.jpg",
       tags: [],
     });
-    // The Image component renders as a host element on web; just verify no crash + glyph is absent
+    // The Image component renders as a host element on web; just verify no
+    // crash + glyph is absent.
     expect(screen.queryByText("X")).toBeNull();
   });
 
@@ -103,7 +107,10 @@ describe("ArticleCard", () => {
     expect(screen.getByText("https://example.com/x")).toBeTruthy();
   });
 
-  it("exposes star and archive action buttons", () => {
+  it("does not expose row-level star or archive buttons", () => {
+    // Row-level actions were removed: those affordances live one tap away
+    // inside the article reader (ActionBar). Library is for finding
+    // articles to read, not for managing them in place.
     renderCard({
       id: 1,
       title: "Title",
@@ -116,7 +123,7 @@ describe("ArticleCard", () => {
       previewImage: null,
       tags: [],
     });
-    expect(screen.getByLabelText("star")).toBeTruthy();
-    expect(screen.getByLabelText("archive")).toBeTruthy();
+    expect(screen.queryByLabelText("star")).toBeNull();
+    expect(screen.queryByLabelText("archive")).toBeNull();
   });
 });

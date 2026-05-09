@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { LibraryHeader } from "@/components/LibraryHeader";
 import { ArticleList } from "@/components/ArticleList";
 import { useArticles } from "@/hooks/useArticles";
 import { useSyncNow } from "@/hooks/useSyncNow";
+import { parseTagsParam } from "@/lib/tagParams";
 
 export default function ArchiveRoute() {
-  const articles = useArticles("archive");
+  const params = useLocalSearchParams<{ tags?: string | string[] }>();
+  const tagSlugs = parseTagsParam(params.tags);
+  const articles = useArticles("archive", tagSlugs);
   const sync = useSyncNow();
   const [pulling, setPulling] = useState(false);
   const onRefresh = async () => {
@@ -22,6 +26,7 @@ export default function ArchiveRoute() {
       <LibraryHeader
         title="Archive"
         activeFilter="archive"
+        activeTags={tagSlugs}
         {...(articles.data ? { count: articles.data.length } : {})}
       />
       <ArticleList
@@ -29,8 +34,13 @@ export default function ArchiveRoute() {
         loading={articles.isLoading}
         refreshing={pulling}
         onRefresh={onRefresh}
-        emptyTitle="Empty archive"
-        emptyDescription="Archived articles live here so you remember they're done."
+        suppressIndicatorFor="read"
+        emptyTitle={tagSlugs.length > 0 ? "Nothing matches" : "Empty archive"}
+        emptyDescription={
+          tagSlugs.length > 0
+            ? "No archived articles carry every selected tag."
+            : "Archived articles live here so you remember they're done."
+        }
       />
     </View>
   );

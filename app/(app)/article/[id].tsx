@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, Text, View } from "react-native";
+import { Linking, Platform, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFullArticle } from "@/hooks/useFullArticle";
 import { useReaderPrefs } from "@/hooks/useReaderPrefs";
@@ -12,12 +12,21 @@ import {
 import { buildReaderHtml } from "@/reader/pipeline";
 import { ReaderPrefsSheet } from "@/components/ReaderPrefsSheet";
 import { ActionBar } from "@/components/ActionBar";
+import { OverflowSheet, type OverflowItem } from "@/components/OverflowSheet";
 import { SelectionToolbar } from "@/components/SelectionToolbar";
 import { AnnotationSheet } from "@/components/AnnotationSheet";
+import { LiveWebView } from "@/components/LiveWebView";
+import { ArticleHeader, type ArticleMode } from "@/components/ArticleHeader";
+import { ReaderSkeleton } from "@/components/ReaderSkeleton";
+import { ExtractionFailedView } from "@/components/ExtractionFailedView";
 import { ensureCached, buildLocalLookup } from "@/images/cache";
 import { getDb } from "@/db";
 import { setScrollPosition } from "@/db/repos/articles";
 import { createAnnotationAction } from "@/hooks/useCreateAnnotation";
+import { useReloadEntry } from "@/hooks/useReloadEntry";
+import { showSnackbar } from "@/components/snackbar-store";
+import { goBackOrHome } from "@/lib/navigation";
+import { isExtractionFailed } from "@/reader/extraction-failed";
 
 type SelectionState = { active: false } | { active: true; text: string; ranges: SerializedRange };
 
@@ -27,9 +36,13 @@ export default function ArticleRoute() {
   const articleId = Number(id);
   const article = useFullArticle(articleId);
   const annotations = useAnnotations(articleId);
+  const reload = useReloadEntry();
   const { prefs } = useReaderPrefs();
 
   const [showPrefs, setShowPrefs] = useState(false);
+  const [viewingLive, setViewingLive] = useState(false);
+  const [overrideExtractionCheck, setOverrideExtractionCheck] = useState(false);
+  const [overflowItems, setOverflowItems] = useState<OverflowItem[] | null>(null);
   const [imageLookup, setImageLookup] = useState<((src: string) => string | null) | null>(null);
   const [selection, setSelection] = useState<SelectionState>({ active: false });
   const [openAnnotation, setOpenAnnotation] = useState<{
@@ -112,62 +125,103 @@ export default function ArticleRoute() {
     setSelection({ active: false });
   };
 
+  const onAnnotate = async () => {
+    if (!selection.active) return;
+    const text = selection.text;
+    const ranges = selection.ranges;
+    const tempId = await createAnnotationAction({
+      articleId,
+      quote: text,
+      ranges: [ranges],
+      text: null,
+    });
+    readerRef.current?.post({ kind: "wrap-selection", tempId, ranges });
+    renderedAnnotationIds.current.add(tempId);
+    setSelection({ active: false });
+    // Open the annotation editor in the same gesture so the user can write
+    // a note while the quote is still in their head.
+    setOpenAnnotation({ id: tempId, quote: text, text: null });
+  };
+
+  // Loading state — typographic skeleton, header in its loaded-but-empty
+  // shape so the chrome doesn't pop in afterwards.
   if (article.isLoading || !article.data) {
     return (
-      <View className="flex-1 bg-bg items-center justify-center">
-        <ActivityIndicator />
+      <View className="flex-1 bg-bg">
+        <ArticleHeader
+          title={null}
+          domain={null}
+          readingTimeMin={null}
+          savedAt={null}
+          mode={null}
+          onChangeMode={() => undefined}
+          onBack={() => goBackOrHome(router)}
+          onOpenOriginal={() => undefined}
+          onOpenPrefs={() => undefined}
+        />
+        <ReaderSkeleton />
       </View>
     );
   }
 
-  const meta = [
-    article.data.domain_name,
-    article.data.reading_time ? `${article.data.reading_time} min` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const progressPct = Math.round((article.data.scroll_position ?? 0) * 100);
   const articleUrl = article.data.url;
   const onOpenOriginal = async () => {
     await Linking.openURL(articleUrl).catch(() => undefined);
   };
 
+  // Show the segmented control whenever the user has a meaningful choice —
+  // either extraction failed (so Reader is just a failure card) or they're
+  // actively in live view. On web there's no useful "Live" mode (iframing
+  // most sites is blocked by X-Frame-Options), so the segmented stays
+  // hidden and the user gets "Open original" only.
+  const extractionFailed = !overrideExtractionCheck && isExtractionFailed(article.data.content);
+  const mode: ArticleMode | null =
+    Platform.OS === "web"
+      ? null
+      : viewingLive || extractionFailed
+        ? viewingLive
+          ? "live"
+          : "reader"
+        : null;
+
   return (
     <View className="flex-1 bg-bg">
-      <View className="bg-bg items-center">
-        <View className="w-full max-w-[900px]">
-          <View className="px-6 pt-12 pb-3 flex-row items-center gap-3">
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.back()}
-              className="px-2 py-1.5 rounded-md"
-            >
-              <Text className="text-muted text-sm">← Back</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel="open original article in browser"
-              onPress={onOpenOriginal}
-              className="flex-1 items-center px-3"
-            >
-              <Text className="text-fg text-sm underline" numberOfLines={1}>
-                {articleUrl}
-              </Text>
-              {meta.length > 0 ? (
-                <Text className="text-subtle text-xs mt-0.5" numberOfLines={1}>
-                  {meta}
-                </Text>
-              ) : null}
-            </Pressable>
-            <View className="w-[60px]" />
-          </View>
-        </View>
-        <View className="h-[2px] bg-border w-full overflow-hidden">
-          <View className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
-        </View>
-      </View>
+      <ArticleHeader
+        title={article.data.title}
+        domain={article.data.domain_name}
+        readingTimeMin={article.data.reading_time}
+        savedAt={article.data.created_at}
+        mode={mode}
+        onChangeMode={(m) => setViewingLive(m === "live")}
+        onBack={() => goBackOrHome(router)}
+        onOpenOriginal={onOpenOriginal}
+        onOpenPrefs={() => setShowPrefs(true)}
+      />
       <View className="flex-1">
-        {built ? (
+        {viewingLive && Platform.OS !== "web" ? (
+          <LiveWebView url={articleUrl} />
+        ) : extractionFailed ? (
+          <ExtractionFailedView
+            url={articleUrl}
+            onOpenOriginal={onOpenOriginal}
+            onViewLive={Platform.OS === "web" ? null : () => setViewingLive(true)}
+            onReload={async () => {
+              try {
+                await reload.mutateAsync(articleId);
+                showSnackbar({ message: "Reloaded" });
+              } catch (e) {
+                // Session expiry is handled by the api client (signOut +
+                // auth-gate redirect); don't double-toast on top of it.
+                if (e instanceof Error && e.name === "SessionExpiredError") return;
+                showSnackbar({
+                  message: e instanceof Error ? `Reload failed: ${e.message}` : "Reload failed",
+                });
+              }
+            }}
+            reloading={reload.isPending}
+            onShowAnyway={() => setOverrideExtractionCheck(true)}
+          />
+        ) : built ? (
           <ReaderContent
             ref={readerRef}
             document={built.document}
@@ -192,14 +246,13 @@ export default function ArticleRoute() {
             }}
           />
         ) : (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator />
-          </View>
+          <ReaderSkeleton />
         )}
       </View>
       <SelectionToolbar
-        visible={selection.active && !openAnnotation && !showPrefs}
+        visible={selection.active && !openAnnotation && !showPrefs && !viewingLive}
         onHighlight={onHighlight}
+        onAnnotate={onAnnotate}
         onDismiss={() => setSelection({ active: false })}
       />
       <ActionBar
@@ -208,7 +261,16 @@ export default function ArticleRoute() {
         title={article.data.title}
         isStarred={article.data.is_starred === 1}
         isArchived={article.data.is_archived === 1}
-        onOpenPrefs={() => setShowPrefs(true)}
+        onShowOverflow={(items) => setOverflowItems(items)}
+      />
+      {/* Overflow sheet rendered at the route's root, not inside ActionBar
+          — react-native-screens transforms break Modal positioning on web,
+          so the sheet has to live where it can absolute-cover the entire
+          flex-1 route. */}
+      <OverflowSheet
+        visible={overflowItems !== null}
+        items={overflowItems ?? []}
+        onClose={() => setOverflowItems(null)}
       />
       {showPrefs ? <ReaderPrefsSheet onClose={() => setShowPrefs(false)} /> : null}
       <AnnotationSheet annotation={openAnnotation} onClose={() => setOpenAnnotation(null)} />

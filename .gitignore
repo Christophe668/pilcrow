@@ -39,8 +39,8 @@ coverage/
 .env.local
 .env*.local
 
-# local Claude Code settings
-.claude/settings.local.json
+# local Claude Code workspace state
+.claude/
 
 # typescript
 *.tsbuildinfo

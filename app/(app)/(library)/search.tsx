@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { TextInput, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { ArticleList } from "@/components/ArticleList";
 import { LibraryHeader } from "@/components/LibraryHeader";
 import { useSearchArticles } from "@/hooks/useSearchArticles";
 import { useSyncNow } from "@/hooks/useSyncNow";
 
 export default function SearchRoute() {
-  const [query, setQuery] = useState("");
+  // Accept ?q= from the URL so the rail's search box can deep-link here.
+  const params = useLocalSearchParams<{ q?: string | string[] }>();
+  const initial = Array.isArray(params.q) ? (params.q[0] ?? "") : (params.q ?? "");
+  const [query, setQuery] = useState(initial);
   const search = useSearchArticles(query);
   const sync = useSyncNow();
   const [pulling, setPulling] = useState(false);
@@ -41,6 +45,9 @@ export default function SearchRoute() {
         loading={search.isLoading && query.trim().length > 0}
         refreshing={pulling}
         onRefresh={onRefresh}
+        // Search results are sorted by relevance, not recency — grouping by
+        // time would put unrelated articles under the same header.
+        group={false}
         emptyTitle={query.trim().length === 0 ? "Search your library" : "No matches"}
         emptyDescription={
           query.trim().length === 0

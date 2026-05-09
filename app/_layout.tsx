@@ -2,6 +2,7 @@ import "../global.css";
 import { useEffect, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useColorScheme, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/theme/provider";
 import { useAppFonts } from "@/theme/fonts";
@@ -80,10 +81,12 @@ export default function RootLayout() {
   const fontsReady = loaded || error !== null || fontTimeout;
   if (!fontsReady || !hydrated) return null;
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider initialMode="auto" systemScheme={systemScheme}>
-        <AuthGate />
-      </ThemeProvider>
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider initialMode="auto" systemScheme={systemScheme}>
+          <AuthGate />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

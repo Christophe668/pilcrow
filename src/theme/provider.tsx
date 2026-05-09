@@ -69,3 +69,16 @@ export function useTheme() {
   if (!ctx) throw new Error("useTheme must be used inside <ThemeProvider>");
   return ctx;
 }
+
+/**
+ * Resolved palette for the current theme. Use this when a value needs to be
+ * passed to a non-Tailwind consumer (e.g. icon `color` props that don't read
+ * CSS variables). Return type matches `lightPalette` so consumers get the
+ * full set of named tokens with non-nullable strings.
+ */
+export type Tokens = typeof lightPalette;
+
+export function useTokens(): Tokens {
+  const { resolved } = useTheme();
+  return useMemo(() => paletteFor(resolved) as Tokens, [resolved]);
+}

@@ -57,6 +57,31 @@ body {
   max-width: 680px;
   margin: 0 auto;
   -webkit-text-size-adjust: 100%;
+  position: relative;
+}
+/* Magazine-style column rule on the left margin. The base rule is always
+   visible; the accent rule grows from the top as the reader scrolls — the
+   bridge updates --read-progress on scroll. The rule sits just outside the
+   body's max-width column so it reads as a margin marker, not a divider. */
+html::before, html::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  width: 1.5px;
+  pointer-events: none;
+  /* Pin to the left edge of the body's centered column, with 12px gutter. */
+  left: max(8px, calc(50vw - 340px - 12px));
+  z-index: 1;
+}
+html::before {
+  bottom: 0;
+  background: var(--reader-border);
+  opacity: 0.6;
+}
+html::after {
+  height: var(--read-progress, 0%);
+  background: var(--reader-accent);
+  transition: height 80ms linear;
 }
 article > h1:first-child, article > h2:first-child, article > h3:first-child { margin-top: 0; }
 h1, h2, h3 { font-family: var(--reader-font); line-height: 1.2; margin-top: 1.5em; }

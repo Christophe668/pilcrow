@@ -1,18 +1,18 @@
 import type { ExpoConfig } from "@expo/config-types";
 
 const config: ExpoConfig = {
-  name: "wallabag",
-  slug: "wallabag",
-  scheme: "wallabag",
+  name: "Pilcrow",
+  slug: "pilcrow",
+  scheme: "pilcrow",
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "automatic",
   ios: {
-    bundleIdentifier: "com.cpecsteen.wallabag",
+    bundleIdentifier: "com.cpecsteen.pilcrow",
     supportsTablet: true,
   },
   android: {
-    package: "com.cpecsteen.wallabag",
+    package: "com.cpecsteen.pilcrow",
   },
   web: {
     bundler: "metro",

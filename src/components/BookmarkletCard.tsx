@@ -12,7 +12,7 @@ export function BookmarkletCard() {
   const origin =
     isWeb && typeof window !== "undefined"
       ? window.location.origin
-      : "https://your-wallabag-app.example";
+      : "https://your-pilcrow-app.example";
   const js = bookmarkletJs(origin);
   const [copied, setCopied] = useState(false);
 
@@ -41,7 +41,7 @@ export function BookmarkletCard() {
             marginBottom: 8,
           },
         },
-        "+ Save to wallabag",
+        "+ Save to Pilcrow",
       )
     : null;
 

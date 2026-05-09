@@ -1,6 +1,6 @@
-# wallabag — Expo client
+# Pilcrow — a Wallabag reading client
 
-Cross-platform Wallabag reader (iOS, Android, web), built with Expo.
+Cross-platform reader for [Wallabag](https://wallabag.org) (iOS, Android, web), built with Expo.
 
 ## Status
 

@@ -40,8 +40,8 @@ export default function ServerScreen() {
   return (
     <View className="flex-1 bg-bg items-center justify-center px-6">
       <View className="w-full max-w-[420px]">
-        <Text className="font-display text-fg text-4xl mb-2">wallabag</Text>
-        <Text className="text-muted text-base mb-10">Connect to your server</Text>
+        <Text className="font-display text-fg text-4xl mb-2">Pilcrow</Text>
+        <Text className="text-muted text-base mb-10">Connect to your Wallabag server</Text>
 
         <Text className="text-fg text-sm mb-2">Server URL</Text>
         <Controller

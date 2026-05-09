@@ -1,5 +1,5 @@
 {
-  "name": "wallabag",
+  "name": "pilcrow",
   "version": "0.1.0",
   "main": "expo-router/entry",
   "scripts": {
@@ -7,6 +7,7 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
+    "build:web": "expo export -p web",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

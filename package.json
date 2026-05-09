@@ -1,6 +1,7 @@
 {
   "name": "pilcrow",
   "version": "0.1.0",
+  "packageManager": "pnpm@10.33.2",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

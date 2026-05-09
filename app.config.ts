@@ -8,11 +8,11 @@ const config: ExpoConfig = {
   orientation: "portrait",
   userInterfaceStyle: "automatic",
   ios: {
-    bundleIdentifier: "com.cpecsteen.pilcrow",
+    bundleIdentifier: "com.pilcrow.app",
     supportsTablet: true,
   },
   android: {
-    package: "com.cpecsteen.pilcrow",
+    package: "com.pilcrow.app",
   },
   web: {
     bundler: "metro",

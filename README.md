@@ -73,9 +73,23 @@ pnpm test
 - `src/` — shared modules (api, auth, theme, lib, hooks)
 - `scripts/` — build-time helpers
 - `tests/` — Vitest unit + UI tests
-- `docs/superpowers/` — design spec and implementation plans
 
-## Reference
+## Web build
 
-The product design is captured in `wallabag-prototype.html` at the repo root.
-The full design spec lives at `docs/superpowers/specs/2026-05-06-wallabag-expo-client-design.md`.
+A static web export and matching `Dockerfile` are included.
+
+```bash
+pnpm build:web              # -> ./dist
+docker build -t pilcrow-web .
+docker run --rm -p 8080:80 pilcrow-web
+```
+
+## License
+
+[MIT](LICENSE). The bundled Newsreader font is licensed under the SIL OFL 1.1
+(see [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)).
+
+## Trademarks
+
+Pilcrow is an independent client and is not affiliated with the Wallabag
+project. _Wallabag_ is a trademark of its respective owner.

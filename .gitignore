@@ -49,3 +49,7 @@ coverage/
 /ios
 /android
 .playwright-mcp/
+
+# local design history — kept on disk, not pushed
+wallabag-prototype.html
+docs/superpowers/

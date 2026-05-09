@@ -8,6 +8,7 @@ const FILTERS = [
   { route: "/(app)/(library)/starred" as Href, label: "Starred", segment: "starred" },
   { route: "/(app)/(library)/archive" as Href, label: "Archive", segment: "archive" },
   { route: "/(app)/(library)/all" as Href, label: "All", segment: "all" },
+  { route: "/(app)/(library)/stats" as Href, label: "Stats", segment: "stats" },
 ] as const;
 
 export function Rail() {

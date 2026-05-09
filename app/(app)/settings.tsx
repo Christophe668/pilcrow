@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "@/auth/state";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
@@ -61,6 +61,18 @@ export default function Settings() {
               <Text className="text-accent text-sm">Sync now</Text>
             )}
           </Pressable>
+        </Section>
+
+        <Section title="Library">
+          <Link href="/(app)/(library)/stats" asChild>
+            <Pressable
+              accessibilityRole="link"
+              className="px-4 py-3 flex-row justify-between items-center"
+            >
+              <Text className="text-fg text-sm">Stats</Text>
+              <Text className="text-subtle text-sm">›</Text>
+            </Pressable>
+          </Link>
         </Section>
 
         <Section title="Save shortcuts">

@@ -19,10 +19,7 @@ function AuthGate() {
   const auth = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const platform = (Platform.OS === "web" ? "web" : Platform.OS) as
-    | "web"
-    | "ios"
-    | "android";
+  const platform = (Platform.OS === "web" ? "web" : Platform.OS) as "web" | "ios" | "android";
   const decision = decideRoute(platform, auth.status, segments);
 
   useEffect(() => {

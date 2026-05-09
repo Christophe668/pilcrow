@@ -96,7 +96,8 @@
       "metro-minify-terser": "0.83.7",
       "@react-native/metro-config": "0.83.6",
       "@react-native/metro-babel-transformer": "0.83.6",
-      "@react-native/community-cli-plugin": "0.83.6"
+      "@react-native/community-cli-plugin": "0.83.6",
+      "postcss": "^8.5.10"
     }
   }
 }

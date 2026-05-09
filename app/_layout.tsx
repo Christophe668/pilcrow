@@ -1,7 +1,7 @@
 import "../global.css";
 import { useEffect, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
-import { useColorScheme, View } from "react-native";
+import { useColorScheme, View, Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/theme/provider";
@@ -9,6 +9,7 @@ import { useAppFonts } from "@/theme/fonts";
 import { hydrateAuth } from "@/auth/state";
 import { useAuth } from "@/hooks/useAuth";
 import { useBootstrapSync } from "@/hooks/useBootstrapSync";
+import { decideRoute } from "@/lib/route-decision";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -18,26 +19,21 @@ function AuthGate() {
   const auth = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const inAuthGroup = segments[0] === "(auth)";
-  const mismatch =
-    auth.status === "authenticated"
-      ? inAuthGroup
-      : auth.status === "unauthenticated"
-        ? !inAuthGroup
-        : false;
+  const platform = (Platform.OS === "web" ? "web" : Platform.OS) as
+    | "web"
+    | "ios"
+    | "android";
+  const decision = decideRoute(platform, auth.status, segments);
 
   useEffect(() => {
-    if (auth.status === "unknown") return;
-    if (auth.status === "authenticated" && inAuthGroup) {
-      router.replace("/(app)/(library)");
-    } else if (auth.status === "unauthenticated" && !inAuthGroup) {
-      router.replace("/(auth)/server");
+    if (decision.kind === "redirect") {
+      router.replace(decision.to as never);
     }
-  }, [auth.status, inAuthGroup, router]);
+  }, [decision, router]);
 
   useBootstrapSync();
 
-  if (auth.status === "unknown" || mismatch) {
+  if (decision.kind !== "render") {
     return <View className="flex-1 bg-bg" />;
   }
   return <Slot />;

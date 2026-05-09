@@ -121,6 +121,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.4
         version: 9.39.4
+      '@expo/config-types':
+        specifier: ^55.0.5
+        version: 55.0.5
       '@testing-library/react-native':
         specifier: ^13.3.3
         version: 13.3.3(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react-test-renderer@19.2.0(react@19.2.0))(react@19.2.0)

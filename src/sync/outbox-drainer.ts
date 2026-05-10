@@ -51,11 +51,15 @@ async function processOne(row: OutboxRow): Promise<void> {
       const realId = Number(real.id);
       await db.run("DELETE FROM articles WHERE id = ?", [p.tempId]);
       await db.run(
-        `INSERT INTO articles (id, title, url, domain_name, created_at, updated_at, server_updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at`,
+        `INSERT INTO articles (id, backend_id, title, url, domain_name, created_at, updated_at, server_updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           backend_id = excluded.backend_id,
+           title = excluded.title,
+           updated_at = excluded.updated_at`,
         [
           realId,
+          real.id,
           real.title,
           real.url,
           real.domainName,
@@ -118,7 +122,7 @@ async function processOne(row: OutboxRow): Promise<void> {
           endOffset: r.endOffset,
         })),
       });
-      await rewriteAnnotationId(db, p.tempId, Number(real.id));
+      await rewriteAnnotationId(db, p.tempId, Number(real.id), real.id);
       dataEvents.emit({ kind: "annotations", articleId: p.entryId });
       return;
     }

@@ -2,17 +2,27 @@ import type { DbDriver } from "../driver";
 
 export type Tag = { id: number; label: string; slug: string };
 
-export async function upsertTags(db: DbDriver, tags: readonly Tag[]): Promise<void> {
+export type TagUpsert = Tag & { backend_id?: string };
+
+export async function upsertTags(db: DbDriver, tags: readonly TagUpsert[]): Promise<void> {
   if (tags.length === 0) return;
   await db.transaction(async (tx) => {
     for (const t of tags) {
+      const backendId = t.backend_id ?? String(t.id);
       await tx.run(
-        `INSERT INTO tags (id, label, slug) VALUES (?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET label = excluded.label, slug = excluded.slug`,
-        [t.id, t.label, t.slug],
+        `INSERT INTO tags (id, backend_id, label, slug) VALUES (?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           backend_id = excluded.backend_id,
+           label = excluded.label,
+           slug = excluded.slug`,
+        [t.id, backendId, t.label, t.slug],
       );
     }
   });
+}
+
+export async function findTagByBackendId(db: DbDriver, backendId: string): Promise<Tag | null> {
+  return db.get<Tag>("SELECT id, label, slug FROM tags WHERE backend_id = ?", [backendId]);
 }
 
 export async function listTags(db: DbDriver): Promise<Tag[]> {

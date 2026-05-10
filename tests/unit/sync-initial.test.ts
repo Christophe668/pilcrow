@@ -105,11 +105,19 @@ describe("runInitialSync", () => {
     await runInitialSync();
 
     expect(pageHits).toBe(2);
-    const articles = await db.all<{ id: number }>("SELECT id FROM articles ORDER BY id");
+    const articles = await db.all<{ id: number; backend_id: string }>(
+      "SELECT id, backend_id FROM articles ORDER BY id",
+    );
     expect(articles.map((a) => a.id)).toEqual([1, 2, 3]);
+    // backend_id is the stringified server identity. Currently equal to
+    // String(id) for Wallabag; the column exists so a future Readeck
+    // adapter can write UUIDs into it without changing the schema.
+    expect(articles.map((a) => a.backend_id)).toEqual(["1", "2", "3"]);
 
-    const tags = await db.all<{ slug: string }>("SELECT slug FROM tags");
-    expect(tags.map((t) => t.slug)).toEqual(["foo"]);
+    const tags = await db.all<{ slug: string; backend_id: string }>(
+      "SELECT slug, backend_id FROM tags",
+    );
+    expect(tags).toEqual([{ slug: "foo", backend_id: "10" }]);
 
     const link = await db.all<{ article_id: number; tag_id: number }>(
       "SELECT article_id, tag_id FROM article_tags",

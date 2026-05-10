@@ -10,6 +10,7 @@ import { dataEvents } from "@/sync/events";
 function articleToRow(a: Article): Partial<ArticleRow> {
   return {
     id: Number(a.id),
+    backend_id: a.id,
     title: a.title,
     url: a.url,
     domain_name: a.domainName,
@@ -42,7 +43,12 @@ async function fetchOne(id: number) {
       if (article.tags.length > 0) {
         await upsertTags(
           db,
-          article.tags.map((t) => ({ id: Number(t.id), label: t.label, slug: t.slug })),
+          article.tags.map((t) => ({
+            id: Number(t.id),
+            backend_id: t.id,
+            label: t.label,
+            slug: t.slug,
+          })),
         );
         await attachTags(
           db,

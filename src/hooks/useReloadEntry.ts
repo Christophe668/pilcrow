@@ -31,6 +31,7 @@ export async function reloadEntryAction(articleId: number): Promise<Article> {
 function articleToRow(a: Article): Partial<ArticleRow> {
   return {
     id: Number(a.id),
+    backend_id: a.id,
     title: a.title,
     url: a.url,
     domain_name: a.domainName,

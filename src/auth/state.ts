@@ -3,6 +3,8 @@ import { secureSet, secureGet } from "@/auth/storage";
 import { applyTokenBundle, clearTokens } from "@/auth/tokens";
 import type { TokenBundle } from "@/api/types";
 import { clearAllData, resetDb } from "@/db";
+import { setActiveBackend } from "@/api/backend";
+import { getActiveBackendKind, clearActiveBackendKind } from "@/api/backend/auth";
 
 export type AuthState =
   | { status: "unknown"; serverUrl: null }
@@ -50,6 +52,12 @@ export async function hydrateAuth(): Promise<void> {
   } catch {
     access = null;
   }
+  // Bind the active backend before flipping the store, so any consumer
+  // that re-renders on `authenticated` and immediately calls
+  // `getBackend()` sees the right adapter.
+  const kind = await getActiveBackendKind().catch(() => "wallabag" as const);
+  setActiveBackend(kind);
+
   if (access && serverUrl) {
     authStore.set({ status: "authenticated", serverUrl });
   } else {
@@ -65,11 +73,23 @@ export async function signIn(args: {
   bundle: TokenBundle;
 }): Promise<void> {
   await kvSet("server_url", args.serverUrl);
+  await kvSet("backend_kind", "wallabag");
   await secureSet("client_id", args.clientId);
   await secureSet("client_secret", args.clientSecret);
   await secureSet("username", args.username);
   await applyTokenBundle(args.bundle);
+  setActiveBackend("wallabag");
   authStore.set({ status: "authenticated", serverUrl: args.serverUrl });
+}
+
+/**
+ * Called by the Readeck device-code flow once `pollReadeckSignIn`
+ * returns `complete` — server URL, kind, and access_token were already
+ * persisted by the helper, so this just flips the store.
+ */
+export function completeReadeckSignIn(serverUrl: string): void {
+  setActiveBackend("readeck");
+  authStore.set({ status: "authenticated", serverUrl });
 }
 
 export async function signOut(): Promise<void> {
@@ -78,5 +98,9 @@ export async function signOut(): Promise<void> {
   await clearTokens();
   await kvRemove("server_url");
   await kvRemove("last_user_id");
+  await clearActiveBackendKind();
+  // Reset the in-memory adapter back to the Wallabag default so the next
+  // sign-in starts fresh; it'll be re-set on `signIn` / `completeReadeckSignIn`.
+  setActiveBackend("wallabag");
   authStore.set({ status: "unauthenticated", serverUrl: null });
 }

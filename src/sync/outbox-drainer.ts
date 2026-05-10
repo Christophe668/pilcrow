@@ -55,6 +55,31 @@ async function lookupBackendId(
   return row.backend_id;
 }
 
+/**
+ * Joins through `annotations` → `articles` to recover the backend id
+ * of the article an annotation belongs to. Readeck's annotation
+ * endpoints are nested under the bookmark, so the drainer needs both
+ * ids; Wallabag's adapter just ignores the article id.
+ */
+async function lookupAnnotationArticleBackendId(
+  db: DbDriver,
+  annotationLocalId: number,
+): Promise<string> {
+  const row = await db.get<{ backend_id: string | null }>(
+    `SELECT a.backend_id
+       FROM articles a
+       JOIN annotations n ON n.article_id = a.id
+       WHERE n.id = ?`,
+    [annotationLocalId],
+  );
+  if (!row || row.backend_id === null) {
+    throw new Error(
+      `Missing article backend_id for annotation ${annotationLocalId} — outbox row stale?`,
+    );
+  }
+  return row.backend_id;
+}
+
 async function processOne(row: OutboxRow): Promise<void> {
   const op = row.op as OutboxOp;
   const payload = JSON.parse(row.payload_json) as Payloads[OutboxOp];
@@ -188,15 +213,17 @@ async function processOne(row: OutboxRow): Promise<void> {
     }
     case "updateAnnotation": {
       const p = payload as Payloads["updateAnnotation"];
-      const backendId = await lookupBackendId(db, "annotations", p.id);
-      await backend.updateAnnotation(backendId, p.text);
+      const articleBackendId = await lookupAnnotationArticleBackendId(db, p.id);
+      const annotationBackendId = await lookupBackendId(db, "annotations", p.id);
+      await backend.updateAnnotation(articleBackendId, annotationBackendId, p.text);
       await db.run("UPDATE annotations SET pending_op = NULL WHERE id = ?", [p.id]);
       return;
     }
     case "deleteAnnotation": {
       const p = payload as Payloads["deleteAnnotation"];
-      const backendId = await lookupBackendId(db, "annotations", p.id);
-      await backend.deleteAnnotation(backendId);
+      const articleBackendId = await lookupAnnotationArticleBackendId(db, p.id);
+      const annotationBackendId = await lookupBackendId(db, "annotations", p.id);
+      await backend.deleteAnnotation(articleBackendId, annotationBackendId);
       await purgeDeleted(db, p.id);
       return;
     }

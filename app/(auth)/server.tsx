@@ -7,6 +7,8 @@ import { z } from "zod";
 import { normalizeServerUrl } from "@/lib/url";
 import { fetchInfo } from "@/api/info";
 
+type Kind = "wallabag" | "readeck";
+
 const Schema = z.object({
   serverUrl: z.string().min(1, "Server URL is required"),
 });
@@ -14,11 +16,10 @@ type FormData = z.infer<typeof Schema>;
 
 export default function ServerScreen() {
   const router = useRouter();
+  const [kind, setKind] = useState<Kind>("wallabag");
   const [submitting, setSubmitting] = useState(false);
   const [topError, setTopError] = useState<string | null>(null);
   const { control, handleSubmit } = useForm<FormData>({
-    // zodResolver's overloads don't yet line up with `zod@4` ZodObject inference;
-    // the cast is safe because `FormData` is derived from the schema itself.
     resolver: zodResolver(Schema as never) as Resolver<FormData>,
     defaultValues: { serverUrl: "" },
   });
@@ -28,8 +29,16 @@ export default function ServerScreen() {
     setTopError(null);
     try {
       const url = normalizeServerUrl(data.serverUrl);
-      await fetchInfo(url);
-      router.push({ pathname: "/(auth)/credentials", params: { serverUrl: url } });
+      if (kind === "wallabag") {
+        // Probe /api/info.json so the user gets a fast "wrong URL"
+        // signal before they're asked for a username and password.
+        await fetchInfo(url);
+        router.push({ pathname: "/(auth)/credentials", params: { serverUrl: url } });
+      } else {
+        // Readeck has no equivalent unauth probe — defer reachability
+        // to the OAuth client-registration step on the next screen.
+        router.push({ pathname: "/(auth)/readeck-auth", params: { serverUrl: url } });
+      }
     } catch (e) {
       setTopError(e instanceof Error ? e.message : "Could not reach the server");
     } finally {
@@ -41,7 +50,21 @@ export default function ServerScreen() {
     <View className="flex-1 bg-bg items-center justify-center px-6">
       <View className="w-full max-w-[420px]">
         <Text className="font-display text-fg text-4xl mb-2">Pilcrow</Text>
-        <Text className="text-muted text-base mb-10">Connect to your Wallabag server</Text>
+        <Text className="text-muted text-base mb-6">Connect to your read-it-later server</Text>
+
+        <Text className="text-fg text-sm mb-2">Server type</Text>
+        <View className="flex-row mb-6 rounded-md overflow-hidden border border-border">
+          <KindToggle
+            label="Wallabag"
+            selected={kind === "wallabag"}
+            onPress={() => setKind("wallabag")}
+          />
+          <KindToggle
+            label="Readeck"
+            selected={kind === "readeck"}
+            onPress={() => setKind("readeck")}
+          />
+        </View>
 
         <Text className="text-fg text-sm mb-2">Server URL</Text>
         <Controller
@@ -53,7 +76,11 @@ export default function ServerScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="url"
-                placeholder="Server URL (e.g. https://app.wallabag.it)"
+                placeholder={
+                  kind === "wallabag"
+                    ? "Server URL (e.g. https://app.wallabag.it)"
+                    : "Server URL (e.g. https://readeck.example.com)"
+                }
                 placeholderTextColor="#888"
                 value={value}
                 onChangeText={onChange}
@@ -83,5 +110,26 @@ export default function ServerScreen() {
         </Pressable>
       </View>
     </View>
+  );
+}
+
+function KindToggle({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      className={`flex-1 py-3 items-center ${selected ? "bg-accent" : "bg-surface"}`}
+    >
+      <Text className={selected ? "text-white font-medium" : "text-fg"}>{label}</Text>
+    </Pressable>
   );
 }

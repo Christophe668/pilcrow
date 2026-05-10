@@ -1,0 +1,41 @@
+# Pilcrow — Docker Compose example.
+#
+# Two usage patterns:
+#
+# 1. Cross-origin (default). Leave PILCROW_BACKEND_URL unset and add
+#    CORS headers to your Wallabag/Readeck server so the browser is
+#    allowed to talk to it directly.
+#
+# 2. Same-origin proxy (recommended for single-backend setups). Set
+#    PILCROW_BACKEND_URL to your Wallabag/Readeck host; the container
+#    proxies /api and /oauth requests over so the browser only ever
+#    talks to itself.
+#
+# Usage:
+#   docker compose up -d --build
+#   open http://localhost:8080
+#
+# To update later:
+#   git pull && docker compose up -d --build
+
+services:
+  pilcrow:
+    build: .
+    image: pilcrow-web:latest
+    container_name: pilcrow
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      # Same-origin proxy target. Set this to the URL of your Readeck
+      # OR Wallabag server — whichever one you sign in to. Examples:
+      #   PILCROW_BACKEND_URL: https://readeck.example.com
+      #   PILCROW_BACKEND_URL: https://app.wallabag.it
+      # Leave empty for cross-origin mode (then you must configure CORS
+      # on the backend — see docs/DEPLOY.md).
+      PILCROW_BACKEND_URL: ""
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

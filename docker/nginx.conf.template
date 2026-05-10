@@ -1,0 +1,75 @@
+# Pilcrow nginx site config (templated). See docker/entrypoint.sh for
+# the substitution logic and docs/DEPLOY.md for the two deployment
+# modes (same-origin proxy vs. cross-origin direct).
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    server_tokens off;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/manifest+json
+        image/svg+xml
+        font/ttf
+        font/otf;
+
+    # Runtime-config sentinel. The entrypoint writes
+    # /usr/share/nginx/html/runtime-config.json with the backend URL
+    # (or `{}` if unset). The web app fetches it on first paint and
+    # uses it to pre-fill the sign-in screen — no environment-baked
+    # constants in the JS bundle.
+    location = /runtime-config.json {
+        access_log off;
+        add_header Cache-Control "no-store";
+        try_files $uri =404;
+    }
+
+    ${PILCROW_BACKEND_PROXY}
+
+    # Hashed asset bundle is content-addressed; cache hard.
+    location /_expo/ {
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # Fonts — cache hard regardless of folder (.ttf/.otf/.woff2).
+    location ~* \.(?:ttf|otf|woff2?)$ {
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # Everything else: prefer pre-rendered HTML (foo → foo.html),
+    # then directory index, then SPA fallback.
+    location / {
+        try_files $uri $uri.html $uri/index.html /index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    # Health probe for orchestrators.
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+}

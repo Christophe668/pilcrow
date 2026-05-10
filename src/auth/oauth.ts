@@ -1,4 +1,5 @@
 import type { TokenBundle } from "@/api/types";
+import { proxiedFetch } from "@/api/http/web-proxy";
 
 export class InvalidCredentialsError extends Error {
   constructor() {
@@ -26,7 +27,7 @@ async function tokenRequest(serverUrl: string, body: Record<string, string>): Pr
   // arrives as `[object Object]`, the server sees no `grant_type` field, and
   // returns `unsupported_grant_type`. Encoding to a plain string avoids that.
   const form = encodeForm(body);
-  const res = await fetch(url, {
+  const res = await proxiedFetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",

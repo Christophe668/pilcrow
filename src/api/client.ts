@@ -3,6 +3,7 @@ import { ensureFreshToken } from "@/auth/tokens";
 import { signOut } from "@/auth/state";
 import { InvalidCredentialsError } from "@/auth/oauth";
 import { kvGet } from "@/lib/async-storage";
+import { proxiedFetch } from "@/api/http/web-proxy";
 
 export type RequestArgs = {
   serverUrl: string;
@@ -67,7 +68,7 @@ async function send(args: RequestArgs, token: string): Promise<Response> {
   if (args.body !== undefined) {
     init.body = JSON.stringify(args.body);
   }
-  return fetch(buildUrl(args.serverUrl, args.path, args.query), init);
+  return proxiedFetch(buildUrl(args.serverUrl, args.path, args.query), init);
 }
 
 export async function request<T>(args: RequestArgs): Promise<T> {

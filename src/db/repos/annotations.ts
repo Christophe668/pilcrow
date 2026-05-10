@@ -2,6 +2,7 @@ import type { DbDriver } from "../driver";
 
 export type AnnotationRow = {
   id: number;
+  backend_id: string | null;
   article_id: number;
   quote: string;
   ranges_json: string;
@@ -13,6 +14,7 @@ export type AnnotationRow = {
 
 const COLS = [
   "id",
+  "backend_id",
   "article_id",
   "quote",
   "ranges_json",
@@ -78,8 +80,22 @@ export async function rewriteAnnotationId(
   db: DbDriver,
   tempId: number,
   realId: number,
+  backendId?: string,
 ): Promise<void> {
-  await db.run(`UPDATE annotations SET id = ?, pending_op = NULL WHERE id = ?`, [realId, tempId]);
+  await db.run(`UPDATE annotations SET id = ?, backend_id = ?, pending_op = NULL WHERE id = ?`, [
+    realId,
+    backendId ?? String(realId),
+    tempId,
+  ]);
+}
+
+export async function findAnnotationByBackendId(
+  db: DbDriver,
+  backendId: string,
+): Promise<AnnotationRow | null> {
+  return db.get<AnnotationRow>(`SELECT ${COLS.join(", ")} FROM annotations WHERE backend_id = ?`, [
+    backendId,
+  ]);
 }
 
 export async function purgeDeleted(db: DbDriver, id: number): Promise<void> {

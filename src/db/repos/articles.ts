@@ -13,6 +13,7 @@ const IN_PROGRESS_HIGH = 0.95;
 
 export type ArticleRow = {
   id: number;
+  backend_id: string | null;
   title: string | null;
   url: string;
   domain_name: string | null;
@@ -36,6 +37,7 @@ export type ArticleRow = {
 
 const COLS = [
   "id",
+  "backend_id",
   "title",
   "url",
   "domain_name",
@@ -82,6 +84,15 @@ export async function upsertArticles(
 
 export async function getArticle(db: DbDriver, id: number): Promise<ArticleRow | null> {
   return db.get<ArticleRow>(`SELECT ${COLS.join(", ")} FROM articles WHERE id = ?`, [id]);
+}
+
+export async function findArticleByBackendId(
+  db: DbDriver,
+  backendId: string,
+): Promise<ArticleRow | null> {
+  return db.get<ArticleRow>(`SELECT ${COLS.join(", ")} FROM articles WHERE backend_id = ?`, [
+    backendId,
+  ]);
 }
 
 /** Slim row for the article list. Excludes the full HTML body; `excerpt`

@@ -1,45 +1,53 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "@/db";
-import { getArticle, upsertArticles } from "@/db/repos/articles";
+import { getArticle, upsertArticles, type ArticleRow } from "@/db/repos/articles";
 import { tagsForArticle, attachTags, upsertTags } from "@/db/repos/tags";
-import { getEntry } from "@/api/entries";
+import { getBackend } from "@/api/backend";
+import type { Article } from "@/api/backend";
 import { dataEvents } from "@/sync/events";
+
+function articleToRow(a: Article): Partial<ArticleRow> {
+  return {
+    id: Number(a.id),
+    title: a.title,
+    url: a.url,
+    domain_name: a.domainName,
+    content: a.content,
+    preview_picture: a.previewPicture,
+    reading_time: a.readingTime,
+    language: a.language,
+    is_archived: a.isArchived ? 1 : 0,
+    is_starred: a.isStarred ? 1 : 0,
+    created_at: a.createdAt,
+    updated_at: a.updatedAt,
+    starred_at: a.starredAt,
+    archived_at: a.archivedAt,
+    published_at: a.publishedAt,
+    published_by: a.authors.length > 0 ? a.authors.join(", ") : null,
+    server_updated_at: a.updatedAt,
+  };
+}
 
 async function fetchOne(id: number) {
   const db = await getDb();
   let row = await getArticle(db, id);
 
   if (row && row.content === null) {
-    const entry = await getEntry(id).catch(() => null);
-    if (entry) {
-      await upsertArticles(db, [
-        {
-          id: entry.id,
-          title: entry.title,
-          url: entry.url,
-          domain_name: entry.domain_name,
-          content: entry.content,
-          preview_picture: entry.preview_picture,
-          reading_time: entry.reading_time,
-          language: entry.language,
-          is_archived: entry.is_archived,
-          is_starred: entry.is_starred,
-          created_at: entry.created_at,
-          updated_at: entry.updated_at,
-          starred_at: entry.starred_at,
-          archived_at: entry.archived_at,
-          published_at: entry.published_at,
-          published_by: entry.published_by ? entry.published_by.join(", ") : null,
-          server_updated_at: entry.updated_at,
-        },
-      ]);
-      if (entry.tags.length > 0) {
-        await upsertTags(db, entry.tags);
+    const article = await getBackend()
+      .getArticle(String(id))
+      .catch(() => null);
+    if (article) {
+      await upsertArticles(db, [articleToRow(article)]);
+      if (article.tags.length > 0) {
+        await upsertTags(
+          db,
+          article.tags.map((t) => ({ id: Number(t.id), label: t.label, slug: t.slug })),
+        );
         await attachTags(
           db,
-          entry.id,
-          entry.tags.map((t) => t.id),
+          Number(article.id),
+          article.tags.map((t) => Number(t.id)),
         );
       }
       row = await getArticle(db, id);

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type AsyncKey = "server_url" | "last_user_id" | "theme_mode";
+export type AsyncKey = "server_url" | "last_user_id" | "theme_mode" | "backend_kind";
 
 export async function kvGet(key: AsyncKey): Promise<string | null> {
   return AsyncStorage.getItem(`wb:${key}`);
@@ -15,7 +15,7 @@ export async function kvRemove(key: AsyncKey): Promise<void> {
 }
 
 export async function kvClear(): Promise<void> {
-  for (const k of ["server_url", "last_user_id", "theme_mode"] as const) {
+  for (const k of ["server_url", "last_user_id", "theme_mode", "backend_kind"] as const) {
     await kvRemove(k);
   }
 }

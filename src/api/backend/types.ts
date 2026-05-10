@@ -124,6 +124,11 @@ export interface Backend {
 
   listAnnotations(articleId: ArticleId): Promise<BackendAnnotation[]>;
   createAnnotation(articleId: ArticleId, input: CreateAnnotationInput): Promise<BackendAnnotation>;
-  updateAnnotation(id: AnnotationId, note: string | null): Promise<void>;
-  deleteAnnotation(id: AnnotationId): Promise<void>;
+  /**
+   * Both ids are required — Wallabag annotations are addressed by their
+   * own id alone, but Readeck nests annotations under the bookmark, so
+   * the adapter needs both. Wallabag's adapter ignores `articleId`.
+   */
+  updateAnnotation(articleId: ArticleId, id: AnnotationId, note: string | null): Promise<void>;
+  deleteAnnotation(articleId: ArticleId, id: AnnotationId): Promise<void>;
 }

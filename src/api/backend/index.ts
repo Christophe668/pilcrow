@@ -1,13 +1,27 @@
 import { WallabagBackend } from "./wallabag";
-import type { Backend } from "./types";
+import { ReadeckBackend } from "./readeck";
+import type { Backend, BackendKind } from "./types";
 
 /**
- * Returns the active backend. Today only Wallabag is wired up; when a
- * Readeck adapter lands, this will read the backend kind from session
- * storage and dispatch.
+ * Synchronous active-backend cache. Populated by `setActiveBackend`
+ * during sign-in and during app boot (after `kvGet("backend_kind")`
+ * resolves). Defaults to Wallabag because every previous pilcrow
+ * install pre-dates the multi-backend split — those users never
+ * touched the kind storage slot, and reading "wallabag" preserves
+ * their behavior.
  */
+let active: Backend = WallabagBackend;
+
 export function getBackend(): Backend {
-  return WallabagBackend;
+  return active;
+}
+
+export function setActiveBackend(kind: BackendKind): void {
+  active = kind === "readeck" ? ReadeckBackend : WallabagBackend;
+}
+
+export function adapterForKind(kind: BackendKind): Backend {
+  return kind === "readeck" ? ReadeckBackend : WallabagBackend;
 }
 
 export type {

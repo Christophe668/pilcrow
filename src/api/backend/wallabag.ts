@@ -156,11 +156,11 @@ export const WallabagBackend: Backend = {
     return annotationToBackend(created, articleId);
   },
 
-  async updateAnnotation(id, note) {
+  async updateAnnotation(_articleId, id, note) {
     await wbUpdateAnnotation(Number(id), { text: note });
   },
 
-  async deleteAnnotation(id) {
+  async deleteAnnotation(_articleId, id) {
     await wbDeleteAnnotation(Number(id));
   },
 };

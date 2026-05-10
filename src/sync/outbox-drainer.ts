@@ -8,19 +8,19 @@ import {
 } from "@/db/repos/outbox";
 import { clearPendingOp, deleteArticle } from "@/db/repos/articles";
 import { rewriteAnnotationId, purgeDeleted } from "@/db/repos/annotations";
-import { createEntry, updateEntry, deleteEntry } from "@/api/entries";
-import { addTagsToEntry, removeTagFromEntry } from "@/api/tags";
-import {
-  createAnnotation as apiCreateAnnotation,
-  updateAnnotation as apiUpdateAnnotation,
-  deleteAnnotation as apiDeleteAnnotation,
-} from "@/api/annotations";
+import { getBackend } from "@/api/backend";
 import { dataEvents } from "./events";
 
 export type DrainSummary = { processed: number; failed: number };
 
 const BATCH = 25;
 
+/**
+ * Outbox payloads keep their original numeric/0-1 shapes — they're
+ * persisted to SQLite, so changing the schema would orphan in-flight
+ * rows on existing installs. The drainer converts to the Backend
+ * interface's normalized shape at the call boundary.
+ */
 type Payloads = {
   createEntry: { tempId: number; url: string; tags?: string[] };
   updateEntry: { id: number; is_starred?: 0 | 1; is_archived?: 0 | 1; tags?: string };
@@ -42,24 +42,26 @@ async function processOne(row: OutboxRow): Promise<void> {
   const op = row.op as OutboxOp;
   const payload = JSON.parse(row.payload_json) as Payloads[OutboxOp];
   const db = await getDb();
+  const backend = getBackend();
 
   switch (op) {
     case "createEntry": {
       const p = payload as Payloads["createEntry"];
-      const real = await createEntry(p.url, p.tags);
+      const real = await backend.createArticle(p.url, p.tags);
+      const realId = Number(real.id);
       await db.run("DELETE FROM articles WHERE id = ?", [p.tempId]);
       await db.run(
         `INSERT INTO articles (id, title, url, domain_name, created_at, updated_at, server_updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at`,
         [
-          real.id,
+          realId,
           real.title,
           real.url,
-          real.domain_name,
-          real.created_at,
-          real.updated_at,
-          real.updated_at,
+          real.domainName,
+          real.createdAt,
+          real.updatedAt,
+          real.updatedAt,
         ],
       );
       dataEvents.emit({ kind: "articles" });
@@ -67,10 +69,17 @@ async function processOne(row: OutboxRow): Promise<void> {
     }
     case "updateEntry": {
       const p = payload as Payloads["updateEntry"];
-      await updateEntry(p.id, {
-        ...(p.is_starred !== undefined ? { is_starred: p.is_starred } : {}),
-        ...(p.is_archived !== undefined ? { is_archived: p.is_archived } : {}),
-        ...(p.tags !== undefined ? { tags: p.tags } : {}),
+      await backend.patchArticle(String(p.id), {
+        ...(p.is_starred !== undefined ? { isStarred: p.is_starred === 1 } : {}),
+        ...(p.is_archived !== undefined ? { isArchived: p.is_archived === 1 } : {}),
+        ...(p.tags !== undefined
+          ? {
+              tagLabels: p.tags
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean),
+            }
+          : {}),
       });
       await clearPendingOp(db, p.id);
       dataEvents.emit({ kind: "article", id: p.id });
@@ -79,43 +88,49 @@ async function processOne(row: OutboxRow): Promise<void> {
     }
     case "deleteEntry": {
       const p = payload as Payloads["deleteEntry"];
-      await deleteEntry(p.id);
+      await backend.deleteArticle(String(p.id));
       await deleteArticle(db, p.id);
       dataEvents.emit({ kind: "articles" });
       return;
     }
     case "addTag": {
       const p = payload as Payloads["addTag"];
-      await addTagsToEntry(p.entryId, p.labels);
+      await backend.addTagsToArticle(String(p.entryId), p.labels);
       dataEvents.emit({ kind: "article", id: p.entryId });
       return;
     }
     case "removeTag": {
       const p = payload as Payloads["removeTag"];
-      await removeTagFromEntry(p.entryId, p.tagId);
+      await backend.removeTagFromArticle(String(p.entryId), String(p.tagId));
       dataEvents.emit({ kind: "article", id: p.entryId });
       return;
     }
     case "createAnnotation": {
       const p = payload as Payloads["createAnnotation"];
-      const real = await apiCreateAnnotation(p.entryId, {
+      const real = await backend.createAnnotation(String(p.entryId), {
         quote: p.quote,
-        ranges: p.ranges,
-        text: p.text,
+        note: p.text,
+        locators: p.ranges.map((r) => ({
+          kind: "dom-range",
+          startXPath: r.start,
+          startOffset: r.startOffset,
+          endXPath: r.end,
+          endOffset: r.endOffset,
+        })),
       });
-      await rewriteAnnotationId(db, p.tempId, real.id);
+      await rewriteAnnotationId(db, p.tempId, Number(real.id));
       dataEvents.emit({ kind: "annotations", articleId: p.entryId });
       return;
     }
     case "updateAnnotation": {
       const p = payload as Payloads["updateAnnotation"];
-      await apiUpdateAnnotation(p.id, { text: p.text });
+      await backend.updateAnnotation(String(p.id), p.text);
       await db.run("UPDATE annotations SET pending_op = NULL WHERE id = ?", [p.id]);
       return;
     }
     case "deleteAnnotation": {
       const p = payload as Payloads["deleteAnnotation"];
-      await apiDeleteAnnotation(p.id);
+      await backend.deleteAnnotation(String(p.id));
       await purgeDeleted(db, p.id);
       return;
     }

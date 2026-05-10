@@ -1,62 +1,69 @@
 import { getDb } from "@/db";
-import { listEntries } from "@/api/entries";
-import { listTags as apiListTags } from "@/api/tags";
+import { getBackend } from "@/api/backend";
 import { upsertArticles, type ArticleRow } from "@/db/repos/articles";
 import { upsertTags, attachTags } from "@/db/repos/tags";
 import { setSyncValue, getSyncValue } from "@/db/repos/sync-state";
 import { dataEvents } from "./events";
-import type { Entry } from "@/api/types";
+import type { Article } from "@/api/backend";
 
 const PER_PAGE = 100;
 
-function entryToRow(e: Entry): Partial<ArticleRow> {
+function articleToRow(a: Article): Partial<ArticleRow> {
   return {
-    id: e.id,
-    title: e.title,
-    url: e.url,
-    domain_name: e.domain_name,
-    content: e.content,
-    preview_picture: e.preview_picture,
-    reading_time: e.reading_time,
-    language: e.language,
-    is_archived: e.is_archived,
-    is_starred: e.is_starred,
-    created_at: e.created_at,
-    updated_at: e.updated_at,
-    starred_at: e.starred_at,
-    archived_at: e.archived_at,
-    published_at: e.published_at,
-    published_by: e.published_by ? e.published_by.join(", ") : null,
-    server_updated_at: e.updated_at,
+    id: Number(a.id),
+    title: a.title,
+    url: a.url,
+    domain_name: a.domainName,
+    content: a.content,
+    preview_picture: a.previewPicture,
+    reading_time: a.readingTime,
+    language: a.language,
+    is_archived: a.isArchived ? 1 : 0,
+    is_starred: a.isStarred ? 1 : 0,
+    created_at: a.createdAt,
+    updated_at: a.updatedAt,
+    starred_at: a.starredAt,
+    archived_at: a.archivedAt,
+    published_at: a.publishedAt,
+    published_by: a.authors.length > 0 ? a.authors.join(", ") : null,
+    server_updated_at: a.updatedAt,
   };
 }
 
 export async function runInitialSync(): Promise<void> {
   const db = await getDb();
+  const backend = getBackend();
 
-  const tags = await apiListTags();
-  await upsertTags(db, tags);
+  const tags = await backend.listTags();
+  await upsertTags(
+    db,
+    tags.map((t) => ({ id: Number(t.id), label: t.label, slug: t.slug })),
+  );
 
   let page = 1;
   let totalPages = 1;
   let mostRecent: string | null = null;
 
   while (page <= totalPages) {
-    const result = await listEntries({ page, perPage: PER_PAGE, detail: "metadata" });
-    totalPages = result.pages;
-    const rows = result._embedded.items.map(entryToRow);
+    const result = await backend.listArticles({
+      page,
+      perPage: PER_PAGE,
+      detail: "metadata",
+    });
+    totalPages = result.totalPages;
+    const rows = result.items.map(articleToRow);
     await upsertArticles(db, rows);
 
-    for (const e of result._embedded.items) {
-      if (e.tags.length > 0) {
+    for (const a of result.items) {
+      if (a.tags.length > 0) {
         await attachTags(
           db,
-          e.id,
-          e.tags.map((t) => t.id),
+          Number(a.id),
+          a.tags.map((t) => Number(t.id)),
         );
       }
-      if (!mostRecent || (e.updated_at && e.updated_at > mostRecent)) {
-        mostRecent = e.updated_at;
+      if (!mostRecent || (a.updatedAt && a.updatedAt > mostRecent)) {
+        mostRecent = a.updatedAt;
       }
     }
 
@@ -76,39 +83,43 @@ export async function runInitialSync(): Promise<void> {
 
 export async function runIncrementalSync(): Promise<void> {
   const db = await getDb();
+  const backend = getBackend();
   const since = await getSyncValue(db, "last_since");
   const sinceNum = since ? Number(since) : undefined;
 
-  const tags = await apiListTags();
-  await upsertTags(db, tags);
+  const tags = await backend.listTags();
+  await upsertTags(
+    db,
+    tags.map((t) => ({ id: Number(t.id), label: t.label, slug: t.slug })),
+  );
 
   let page = 1;
   let totalPages = 1;
   let mostRecent: string | null = null;
 
   while (page <= totalPages) {
-    const result = await listEntries({
+    const result = await backend.listArticles({
       page,
       perPage: PER_PAGE,
       detail: "full",
       ...(sinceNum !== undefined ? { since: sinceNum } : {}),
     });
-    totalPages = result.pages;
-    if (result._embedded.items.length === 0) break;
+    totalPages = result.totalPages;
+    if (result.items.length === 0) break;
 
-    const rows = result._embedded.items.map(entryToRow);
+    const rows = result.items.map(articleToRow);
     await upsertArticles(db, rows);
 
-    for (const e of result._embedded.items) {
-      if (e.tags.length > 0) {
+    for (const a of result.items) {
+      if (a.tags.length > 0) {
         await attachTags(
           db,
-          e.id,
-          e.tags.map((t) => t.id),
+          Number(a.id),
+          a.tags.map((t) => Number(t.id)),
         );
       }
-      if (!mostRecent || (e.updated_at && e.updated_at > mostRecent)) {
-        mostRecent = e.updated_at;
+      if (!mostRecent || (a.updatedAt && a.updatedAt > mostRecent)) {
+        mostRecent = a.updatedAt;
       }
     }
     page += 1;

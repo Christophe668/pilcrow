@@ -8,6 +8,7 @@ than its own roadmap.
 ## [Unreleased]
 
 ### Added
+
 - `_meta.lua`, `main.lua`, `queueview.lua`, `articlerow.lua`,
   `settingsview.lua`, `cache.lua`, `wallabagclient.lua`.
 - Fullscreen Wallabag queue with filter (unread / starred / archived / all)
@@ -18,9 +19,9 @@ than its own roadmap.
 - Plugin-local settings: articles per sync, auto-sync on Wi-Fi, open on
   startup, finish-prompt mode, download directory.
 - Auto-sync on queue open: cached list paints first, then a background
-  sync runs if the *Auto-sync when WiFi is on* toggle is enabled
+  sync runs if the _Auto-sync when WiFi is on_ toggle is enabled
   (default ON) and the cache is older than the configurable
-  *Auto-sync if cache older than: N min* threshold (default 10; 0 means
+  _Auto-sync if cache older than: N min_ threshold (default 10; 0 means
   always sync on open).
 - Relative-time subtitle: "synced just now", "synced 5 min ago",
   "synced yesterday" instead of an absolute timestamp.
@@ -59,6 +60,7 @@ than its own roadmap.
   the original Wallabag plugin — no duplicate configuration UI.
 
 ### Known limitations (see README → "Not yet")
+
 - Continuous background auto-sync (driven by NetworkMgr events) is not
   wired up; auto-sync runs on queue open only.
 - No add-article-from-URL inside Pilcrow.

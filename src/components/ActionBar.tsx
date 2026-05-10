@@ -10,6 +10,7 @@ import { useToggleArchived } from "@/hooks/useToggleArchived";
 import { useDeleteArticle } from "@/hooks/useDeleteArticle";
 import { useReloadEntry } from "@/hooks/useReloadEntry";
 import { goBackOrHome } from "@/lib/navigation";
+import { getBackend } from "@/api/backend";
 
 export type ActionBarProps = {
   articleId: number;
@@ -98,21 +99,24 @@ export function ActionBar(props: ActionBarProps) {
   };
 
   const showOverflow = () => {
-    const items: OverflowItem[] = [
-      {
+    const items: OverflowItem[] = [];
+    // Hide the reload affordance when the active backend doesn't
+    // support it (Readeck has no equivalent endpoint).
+    if (getBackend().capabilities.reloadArticle) {
+      items.push({
         key: "reload",
         label: "Reload from server",
         icon: "refresh-cw",
         onPress: onReload,
-      },
-      {
-        key: "delete",
-        label: "Delete article",
-        icon: "trash-2",
-        destructive: true,
-        onPress: onDelete,
-      },
-    ];
+      });
+    }
+    items.push({
+      key: "delete",
+      label: "Delete article",
+      icon: "trash-2",
+      destructive: true,
+      onPress: onDelete,
+    });
     props.onShowOverflow(items);
   };
 

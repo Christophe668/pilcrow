@@ -69,10 +69,14 @@ pnpm test
 
 ## Project layout
 
-- `app/` — Expo Router routes
-- `src/` — shared modules (api, auth, theme, lib, hooks)
-- `scripts/` — build-time helpers
-- `tests/` — Vitest unit + UI tests
+This repo is a small monorepo bundling the three pieces of the Pilcrow ecosystem:
+
+- **Expo app** (this directory) — iOS, Android, and web client
+  - `app/` — Expo Router routes (the web export at `/` doubles as the landing page; meta lives in [`app/+html.tsx`](app/+html.tsx))
+  - `src/` — shared modules (api, auth, theme, lib, hooks)
+  - `scripts/` — build-time helpers
+  - `tests/` — Vitest unit + UI tests
+- **KOReader plugin** — [`koreader-plugin/pilcrow.koplugin/`](koreader-plugin/pilcrow.koplugin/) — turns the Wallabag unread queue into the primary reading experience on Kobo eink devices. See its [README](koreader-plugin/pilcrow.koplugin/README.md) for install + usage.
 
 ## Web build
 

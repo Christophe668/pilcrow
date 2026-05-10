@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pilcrow — UI mockup</title>
+<style>
+  /* eink-friendly: pure b/w, no shadows, no animations, sharp lines */
+  :root {
+    --ink: #000;
+    --paper: #fff;
+    --ghost: #5a5a5a;
+    --hairline: #000;
+    --rule: 2px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: #ddd;
+    font-family: -apple-system, "Segoe UI", "Liberation Sans", sans-serif;
+    color: #111;
+  }
+  header {
+    padding: 32px 40px 8px;
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+  header h1 { margin: 0 0 8px; font-size: 28px; }
+  header p  { margin: 4px 0; color: #333; }
+  header code { background: #eee; padding: 1px 4px; border-radius: 2px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+    gap: 36px 36px;
+    padding: 24px 40px 60px;
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+  .screen-label {
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: #111;
+  }
+  .screen-tag {
+    display: inline-block;
+    background: #111; color: #fff; padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 700; margin-right: 6px;
+    letter-spacing: 0.4px; vertical-align: 1px;
+  }
+  .screen-note {
+    font-size: 12px;
+    color: #555;
+    margin: 0 0 10px;
+    max-width: 540px;
+  }
+
+  /* Kobo Libra 2 = 1264 x 1680 portrait. Scale 0.35 => 442 x 588.       */
+  .device {
+    width: 442px;
+    height: 588px;
+    background: var(--paper);
+    border: 4px solid #1a1a1a;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    color: var(--ink);
+    font-family: "Georgia", "Liberation Serif", serif;
+  }
+  .titlebar {
+    height: 56px;
+    border-bottom: var(--rule) solid var(--hairline);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    font-family: -apple-system, sans-serif;
+  }
+  .titlebar .menu-icon {
+    width: 28px; height: 28px;
+    border: 2px solid var(--ink);
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    padding: 4px 3px;
+  }
+  .titlebar .menu-icon span { display: block; height: 2px; background: var(--ink); }
+  .titlebar h2 {
+    margin: 0 auto;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .subtitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--ghost);
+    padding: 6px 8px 6px 14px;
+    border-bottom: 1px solid #999;
+    font-family: -apple-system, sans-serif;
+  }
+  .subtitle .text   { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subtitle .action {
+    flex: 0 0 auto;
+    width: 32px; height: 28px;
+    border: 1.5px solid var(--ink);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1;
+  }
+  .subtitle.active { color: var(--ink); font-weight: 600; }
+
+  /* Filter chip row (design alternative) */
+  .chip-row {
+    display: flex; gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 14px;
+    border-bottom: 1px solid #999;
+    font-family: -apple-system, sans-serif;
+  }
+  .chip {
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 12px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .chip.solid { background: var(--ink); color: var(--paper); }
+  .chip .x { font-weight: 700; }
+
+  /* Row v2: image card style. Native ~250px → 87.5px @ 0.35×. */
+  .row {
+    height: 88px;
+    border-bottom: 1px solid #bbb;
+    display: flex;
+    align-items: center;
+    padding: 8px 14px;
+    gap: 12px;
+  }
+  .row .thumb {
+    flex: 0 0 70px;
+    height: 52px;
+    border: 1px solid #999;
+    background: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, sans-serif;
+    font-size: 9px;
+    color: #888;
+    overflow: hidden;
+  }
+  .row .thumb.placeholder {
+    background: var(--paper);
+    color: var(--ghost);
+    font-size: 18px;
+  }
+  .row .body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .row .title {
+    font-size: 14px;
+    line-height: 1.25;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .row .meta {
+    font-size: 10px;
+    color: var(--ghost);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: -apple-system, sans-serif;
+  }
+  .row.unread .title { font-weight: 700; }
+  .row.dim          { color: #666; }
+  .row.dim .thumb   { opacity: 0.5; }
+  .row .marker      { font-weight: 700; }
+  .footer {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 36px;
+    border-top: 1px solid #999;
+    display: flex; align-items: stretch;
+    font-size: 11px;
+    color: var(--ink);
+    font-family: -apple-system, sans-serif;
+  }
+  .footer .chev, .footer .page {
+    display: flex; align-items: center; justify-content: center;
+    border-right: 1px solid #ccc;
+    padding: 0 10px;
+  }
+  .footer .chev { width: 44px; font-size: 16px; }
+  .footer .chev:last-child { border-right: 0; }
+  .footer .chev.disabled { color: #aaa; }
+  .footer .page {
+    flex: 1;
+    font-size: 11px;
+  }
+
+  /* Modal overlays */
+  .overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.18);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal {
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    width: 100%;
+    max-width: 360px;
+    max-height: 100%;
+    overflow: auto;
+  }
+  .modal h3 {
+    margin: 0;
+    text-align: center;
+    padding: 12px 16px;
+    border-bottom: 2px solid var(--ink);
+    font-size: 14px;
+    font-family: -apple-system, sans-serif;
+  }
+  .modal .btn {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid #bbb;
+    background: var(--paper);
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 14px;
+    font-family: -apple-system, sans-serif;
+    cursor: default;
+  }
+  .modal .btn.left { text-align: left; padding-left: 22px; }
+  .modal .btn:last-child { border-bottom: 0; }
+  .modal .btn.disabled   { color: #aaa; }
+  .modal .btn.current    { font-weight: 700; }
+  .modal .btn .count {
+    float: right; color: var(--ghost); font-weight: 400; font-size: 12px;
+  }
+
+  .empty {
+    display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+  }
+  .empty .glyph {
+    width: 64px; height: 64px;
+    border: 3px solid var(--ink);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px;
+  }
+  .empty p {
+    margin: 0;
+    font-family: -apple-system, sans-serif;
+    color: #333;
+    font-size: 13px;
+  }
+  .legend {
+    margin: 0 auto;
+    max-width: 1160px;
+    padding: 20px 40px 60px;
+    color: #333;
+    font-size: 13px;
+  }
+  .legend h2 { margin: 8px 0; font-size: 18px; color: #111; }
+  .legend table {
+    border-collapse: collapse; width: 100%;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+  }
+  .legend td { padding: 4px 8px; border-bottom: 1px solid #ccc; vertical-align: top; }
+  .legend td:first-child { width: 220px; color: #000; }
+
+  .alt-banner {
+    background: #fff8c5;
+    border: 1px solid #b8a200;
+    color: #6b5b00;
+    padding: 6px 10px;
+    font-size: 11px;
+    margin: -8px 0 8px;
+    border-radius: 3px;
+    max-width: 540px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Pilcrow — UI mockup (review v3, locked)</h1>
+  <p>
+    Decisions: <strong>chip row</strong> for active filters,
+    <strong>multi-tag</strong> selection, <strong>persisted sort</strong>,
+    <strong>Tags entry stays in top-bar dialog</strong>. Drawn at
+    <strong>0.35×</strong> the pixel dimensions of a Kobo Libra 2
+    (<code>1264 × 1680</code>).
+  </p>
+  <p>
+    Built from KOReader primitives (<code>Menu</code>,
+    <code>ButtonDialog</code>, <code>InputDialog</code>,
+    <code>ConfirmBox</code>) plus one small custom widget — the chip row —
+    for active-filter display.
+  </p>
+</header>
+
+<main class="grid">
+
+  <!-- 1. Queue, default ----------------------------------------------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">CORE</span>Queue (default)</p>
+    <p class="screen-note">
+      Filter: <em>Unread</em>. Title bold for unread; <code>•</code> = unread,
+      <code>★</code> = starred. Right column: domain · reading time. Subtitle
+      uses relative time.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="subtitle">
+        <span class="text">Unread: 24 · starred: 3 · synced just now</span>
+        <span class="action" title="Sync now">↻</span>
+      </div>
+
+      <div class="row unread">
+        <div class="thumb">img</div>
+        <div class="body">
+          <div class="title"><span class="marker">★ • </span>Why we still write code by hand in 2026</div>
+          <div class="meta">stratechery.com · 9 min · 2d ago</div>
+        </div>
+      </div>
+      <div class="row unread">
+        <div class="thumb placeholder">📄</div>
+        <div class="body">
+          <div class="title"><span class="marker">• </span>The unreasonable effectiveness of plain text</div>
+          <div class="meta">jvns.ca · 6 min · 5d ago</div>
+        </div>
+      </div>
+      <div class="row unread">
+        <div class="thumb">img</div>
+        <div class="body">
+          <div class="title"><span class="marker">• </span>How Postgres handles concurrent writes — MVCC, locks, isolation levels</div>
+          <div class="meta">brandur.org · 14 min · 1w ago</div>
+        </div>
+      </div>
+      <div class="row unread">
+        <div class="thumb">img</div>
+        <div class="body">
+          <div class="title"><span class="marker">• </span>The case against generic abstraction layers</div>
+          <div class="meta">martinfowler.com · 11 min · 1w ago</div>
+        </div>
+      </div>
+      <div class="row dim">
+        <div class="thumb placeholder">📄</div>
+        <div class="body">
+          <div class="title">A short essay on long writing</div>
+          <div class="meta">paulgraham.com · 4 min · 2w ago</div>
+        </div>
+      </div>
+      <div class="footer">
+        <div class="chev disabled" title="First page">«</div>
+        <div class="chev disabled" title="Previous page">‹</div>
+        <div class="page" title="Tap to jump to page">Page 1 / 5</div>
+        <div class="chev" title="Next page">›</div>
+        <div class="chev" title="Last page">»</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Top-bar actions menu (expanded) ------------------------------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">CORE</span>Top-bar actions menu</p>
+    <p class="screen-note">
+      Hamburger icon → <em>ButtonDialog</em>. New entries: <strong>Tags…</strong>
+      and <strong>Sort…</strong>. <em>Clear filters</em> is enabled only when
+      something is set.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="subtitle">
+        <span class="text">Unread: 24 · starred: 3 · synced just now</span>
+        <span class="action" title="Sync now">↻</span>
+      </div>
+      <div class="row dim"><div class="thumb">img</div><div class="body"><div class="title">Why we still write code by hand in 2026</div><div class="meta">stratechery.com · 9 min · 2d ago</div></div></div>
+      <div class="row dim"><div class="thumb placeholder">📄</div><div class="body"><div class="title">The unreasonable effectiveness of plain text</div><div class="meta">jvns.ca · 6 min · 5d ago</div></div></div>
+      <div class="row dim"><div class="thumb">img</div><div class="body"><div class="title">How Postgres handles concurrent writes — MVCC, locks, isolation</div><div class="meta">brandur.org · 14 min · 1w ago</div></div></div>
+      <div class="overlay">
+        <div class="modal">
+          <h3>Wallabag</h3>
+          <button class="btn">Sync now</button>
+          <button class="btn">Tags: 2 selected →</button>
+          <button class="btn">Sort: Newest first →</button>
+          <button class="btn">Search…</button>
+          <button class="btn">Clear filters</button>
+          <button class="btn">Settings…</button>
+          <button class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Tag filter dialog (multi-select) ------------------------------ -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">NEW</span>Filter by tag (multi-select)</p>
+    <p class="screen-note">
+      Lists tags from cached metadata with counts. Tap a row to toggle.
+      <strong>Apply</strong> commits the selection (intersection — articles
+      must have ALL ticked tags). <strong>Clear</strong> wipes selection.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="overlay">
+        <div class="modal">
+          <h3>Filter by tag · 2 selected</h3>
+          <button class="btn left">☐ programming <span class="count">31</span></button>
+          <button class="btn left current">☑ postgres <span class="count">12</span></button>
+          <button class="btn left current">☑ ai <span class="count">9</span></button>
+          <button class="btn left">☐ design <span class="count">8</span></button>
+          <button class="btn left">☐ writing <span class="count">5</span></button>
+          <button class="btn left">☐ longreads <span class="count">4</span></button>
+          <button class="btn left">☐ (untagged) <span class="count">17</span></button>
+          <button class="btn">Clear</button>
+          <button class="btn">Cancel</button>
+          <button class="btn current">Apply (2)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Sort dialog --------------------------------------------------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">NEW</span>Sort options</p>
+    <p class="screen-note">
+      Five options. Current selection marked with <code>▸</code>. Reading-time
+      sorts use the value Wallabag returns; rows without a reading time sink
+      to the bottom.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="overlay">
+        <div class="modal">
+          <h3>Sort by</h3>
+          <button class="btn left current">▸ Newest first</button>
+          <button class="btn left">Oldest first</button>
+          <button class="btn left">Longest first</button>
+          <button class="btn left">Shortest first</button>
+          <button class="btn left">Domain (A → Z)</button>
+          <button class="btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Queue with active filters — chip row (locked design) ---------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">CORE</span>Queue with active filters</p>
+    <p class="screen-note">
+      Status chip cycles through Unread/Starred/Archived/All when tapped
+      (the <code>›</code>). Tag and sort chips show <code>✕</code> — tap to
+      remove. Chips wrap to a second line if there are many tags. Each
+      chip-row line costs one article-row of vertical space.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="subtitle">
+        <span class="text">8 results · synced 2 min ago</span>
+        <span class="action" title="Sync now">↻</span>
+      </div>
+      <div class="chip-row">
+        <span class="chip solid">Unread <span class="x">›</span></span>
+        <span class="chip">#postgres <span class="x">✕</span></span>
+        <span class="chip">#ai <span class="x">✕</span></span>
+        <span class="chip">⌕ "perf" <span class="x">✕</span></span>
+        <span class="chip">oldest first <span class="x">✕</span></span>
+      </div>
+      <div class="row unread"><div class="thumb">img</div><div class="body"><div class="title"><span class="marker">• </span>Postgres performance: where the time really goes</div><div class="meta">brandur.org · 18 min · 1w ago</div></div></div>
+      <div class="row unread"><div class="thumb">img</div><div class="body"><div class="title"><span class="marker">• </span>Logical replication caveats you'll only learn the hard way</div><div class="meta">crunchydata.com · 15 min · 1w ago</div></div></div>
+      <div class="row unread"><div class="thumb placeholder">📄</div><div class="body"><div class="title"><span class="marker">• </span>How Postgres handles concurrent writes</div><div class="meta">brandur.org · 14 min · 2w ago</div></div></div>
+      <div class="row unread"><div class="thumb">img</div><div class="body"><div class="title"><span class="marker">• </span>The vector-DB hangover: lessons from a year</div><div class="meta">simonwillison.net · 13 min · 3w ago</div></div></div>
+      <div class="footer">
+        <div class="chev" title="First page">«</div>
+        <div class="chev" title="Previous page">‹</div>
+        <div class="page" title="Tap to jump to page">Page 2 / 4</div>
+        <div class="chev" title="Next page">›</div>
+        <div class="chev" title="Last page">»</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Status mini-dialog -------------------------------------------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">NEW</span>Status chip → mini-dialog</p>
+    <p class="screen-note">
+      Tap the status chip (<code>›</code>): a 4-button dialog opens. One tap
+      to switch — no risk of overshooting like a cycle would have.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="subtitle">
+        <span class="text">8 results · synced 2 min ago</span>
+        <span class="action" title="Sync now">↻</span>
+      </div>
+      <div class="chip-row">
+        <span class="chip solid">Unread <span class="x">›</span></span>
+        <span class="chip">#postgres <span class="x">✕</span></span>
+        <span class="chip">#ai <span class="x">✕</span></span>
+        <span class="chip">⌕ "perf" <span class="x">✕</span></span>
+        <span class="chip">oldest first <span class="x">✕</span></span>
+      </div>
+      <div class="overlay">
+        <div class="modal" style="max-width:280px">
+          <h3>Status</h3>
+          <button class="btn left current">▸ Unread</button>
+          <button class="btn left">Starred</button>
+          <button class="btn left">Archived</button>
+          <button class="btn left">All</button>
+          <button class="btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Search input -------------------------------------------------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">EXISTING</span>Search input</p>
+    <p class="screen-note">
+      <em>InputDialog</em> from the top-bar menu. Substring match against
+      title and domain. Composes with tag filter and sort.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="overlay">
+        <div class="modal">
+          <h3>Search</h3>
+          <div style="padding:14px 16px; border-bottom:1px solid #bbb;">
+            <div style="border-bottom:1px solid var(--ink); padding:6px 4px; font-family:-apple-system,sans-serif; font-size:14px;">
+              postgres
+            </div>
+            <div style="font-size:11px; color:var(--ghost); padding-top:4px;">title or domain</div>
+          </div>
+          <button class="btn">Cancel</button>
+          <button class="btn current">Search</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Long-press row menu ------------------------------------------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">CORE</span>Long-press on a row</p>
+    <p class="screen-note">
+      <em>ButtonDialog</em> with article title at top. Article actions are
+      independent of the queue's filter / sort state.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="subtitle">
+        <span class="text">Unread: 24 · starred: 3 · synced just now</span>
+        <span class="action" title="Sync now">↻</span>
+      </div>
+      <div class="row dim"><div class="thumb">img</div><div class="body"><div class="title">Why we still write code by hand in 2026</div><div class="meta">stratechery.com · 9 min · 2d ago</div></div></div>
+      <div class="row dim"><div class="thumb placeholder">📄</div><div class="body"><div class="title">The unreasonable effectiveness of plain text</div><div class="meta">jvns.ca · 6 min · 5d ago</div></div></div>
+      <div class="row dim"><div class="thumb">img</div><div class="body"><div class="title">How Postgres handles concurrent writes</div><div class="meta">brandur.org · 14 min · 1w ago</div></div></div>
+      <div class="row dim"><div class="thumb">img</div><div class="body"><div class="title">The case against generic abstraction layers</div><div class="meta">martinfowler.com · 11 min · 1w ago</div></div></div>
+
+      <div class="overlay">
+        <div class="modal">
+          <h3>How Postgres handles concurrent writes</h3>
+          <button class="btn">Mark as read</button>
+          <button class="btn">Star</button>
+          <button class="btn">Delete</button>
+          <button class="btn">Copy URL to clipboard</button>
+          <button class="btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. Settings ------------------------------------------------------ -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">UPDATED</span>Plugin settings</p>
+    <p class="screen-note">
+      New row: <em>Auto-sync if cache older than: 10 min</em>. Toggle now
+      defaults ON. Credentials still managed by the original Wallabag plugin.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="overlay">
+        <div class="modal" style="max-width:380px">
+          <h3>Pilcrow settings</h3>
+          <button class="btn">Articles per sync: 30</button>
+          <button class="btn">✓ Auto-sync when WiFi is on</button>
+          <button class="btn">Auto-sync if cache older than: 10 min</button>
+          <button class="btn">✓ Open Pilcrow on startup</button>
+          <button class="btn">Finish prompt: ask</button>
+          <button class="btn">Download directory: (default)</button>
+          <button class="btn disabled">Server &amp; credentials are in the original Wallabag plugin.</button>
+          <button class="btn">Show credentials path</button>
+          <button class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. Finish prompt ------------------------------------------------ -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">CORE</span>Finish-reading prompt</p>
+    <p class="screen-note">
+      Triggered by KOReader's <code>EndOfBook</code>. <em>Always</em> /
+      <em>Never</em> persists the choice and stops asking.
+    </p>
+    <div class="device">
+      <div style="padding:30px 20px; line-height:1.4; font-size:13px;">
+        <p><em>(end of article shown by the regular reader)</em></p>
+        <p>… and that's why concurrent writes in Postgres feel deceptively simple
+          but get interesting fast. The trick is realising that MVCC and locks
+          are different abstractions doing different jobs — and conflating them
+          is where most regressions come from.</p>
+        <p style="text-align:right; color:#888;">— end —</p>
+      </div>
+      <div class="overlay">
+        <div class="modal">
+          <h3>Mark as read in Wallabag?</h3>
+          <div style="padding:14px 16px; font-size:13px; text-align:center;">
+            "How Postgres handles concurrent writes"
+          </div>
+          <button class="btn current">Mark read</button>
+          <button class="btn">Not now</button>
+          <button class="btn">Always</button>
+          <button class="btn">Never</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. Empty state --------------------------------------------------- -->
+  <section>
+    <p class="screen-label"><span class="screen-tag">CORE</span>Empty state</p>
+    <p class="screen-note">
+      First launch with auto-sync toggle ON: this is shown for the half-second
+      before sync completes; otherwise the hint stands.
+    </p>
+    <div class="device">
+      <div class="titlebar">
+        <div class="menu-icon"><span></span><span></span><span></span></div>
+        <h2>Wallabag</h2>
+        <div style="width:28px"></div>
+      </div>
+      <div class="subtitle">
+        <span class="text">Unread: 0 · starred: 0 · never synced</span>
+        <span class="action" title="Sync now">↻</span>
+      </div>
+      <div class="empty">
+        <div class="glyph">⌕</div>
+        <p>No articles yet.</p>
+        <p>Tap the menu icon and choose <strong>Sync now</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<section class="legend">
+  <h2>Locked decisions</h2>
+  <table>
+    <tr><td>Subtitle</td><td>Counts and last-sync on the left, a tappable <strong>↻ Sync</strong> button on the right (44 px hit target). Tap = trigger sync without opening the menu. Saves two taps vs. hamburger → Sync now.</td></tr>
+    <tr><td>Footer</td><td>Five tappable regions: <code>« ‹</code> first/prev page · centre <code>Page X / Y</code> (tap to jump to a specific page via InputDialog) · <code>› »</code> next/last page. Disabled chevrons dim. <strong>This is what KOReader's <code>Menu</code> renders by default</strong> — no code needed beyond using Menu, the chevrons auto-show when there are multiple pages and auto-enable/disable based on current page. The date previously shown is dropped.</td></tr>
+    <tr><td>Row layout (v2)</td><td><strong>Card style</strong>: thumbnail (~120 × 80 native) on the left, two-line title, one meta line "<code>domain · reading time · age</code>". Items per page: <strong>5</strong> (≈251 px native per row, well above the 88 px Kobo touch-target floor).</td></tr>
+    <tr><td>Image source</td><td>Wallabag's <code>preview_picture</code> field. Downloaded during sync, stored at <code>&lt;data_dir&gt;/pilcrow/images/&lt;id&gt;.jpg</code>. Articles without a preview picture get a generic placeholder glyph.</td></tr>
+    <tr><td>Title typography</td><td>Serif (matching reader). Bold for unread, regular weight for archived. Truncates with ellipsis after 2 lines.</td></tr>
+    <tr><td>Meta line</td><td>Sans-serif, smaller, ghost colour. Domain is left-most for scannability; reading time follows; "added X ago" rounds to days/weeks.</td></tr>
+    <tr><td>Active-filter display</td><td><strong>Chip row</strong> below the subtitle. Wraps to multi-line when needed. Each chip-row line costs one article-row.</td></tr>
+    <tr><td>Status chip</td><td>Tap opens a 4-button mini-dialog (Unread / Starred / Archived / All). Marker: <code>›</code>.</td></tr>
+    <tr><td>Tag chips</td><td>One chip per active tag. Tap <code>✕</code> to remove. Add more from top-bar → <em>Tags…</em>.</td></tr>
+    <tr><td>Search chip</td><td>Shown when a search term is active (<code>⌕ "term" ✕</code>). Tap <code>✕</code> to clear.</td></tr>
+    <tr><td>Sort chip</td><td>Hidden at default ("Newest first"). Shown only when overridden. Tap <code>✕</code> to reset to default.</td></tr>
+    <tr><td>Tag selection</td><td><strong>Multi-select</strong> with checkboxes. Semantics: intersection — articles must match all selected tags. <em>Apply</em> button commits.</td></tr>
+    <tr><td>Sort persistence</td><td><strong>Persisted</strong> across sessions in <code>pilcrow.lua</code>.</td></tr>
+    <tr><td>Tags entry placement</td><td>Top-bar dialog (no header shortcut). Reason: chip row already exposes active tags.</td></tr>
+    <tr><td>Search</td><td>Composes with filter + tags + sort. Substring on title and domain.</td></tr>
+  </table>
+
+  <h2>Implementation impact</h2>
+  <ul>
+    <li>New custom widget: <code>ChipRow</code> (HorizontalGroup of mini ButtonContainers). ~120 lines.</li>
+    <li><code>cache.lua</code>: extend <code>list()</code> to take a tag set + sort key. <code>tagCounts()</code> helper for the multi-select dialog.</li>
+    <li><code>queueview.lua</code>: thread tag set, sort, search through <code>_buildItemTable</code>. Render chip row above the menu items when any filter is active.</li>
+    <li><code>settingsview.lua</code>: add <code>sort_key</code> persisted setting (default <code>"newest"</code>).</li>
+    <li><code>main.lua</code>: no changes beyond passing extra args.</li>
+  </ul>
+</section>
+
+</body>
+</html>

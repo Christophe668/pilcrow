@@ -159,9 +159,7 @@ export function Rail() {
 
       <View className="mt-8">
         <Link href={"/(app)/settings" as Href} asChild>
-          <Pressable
-            className={`${rowClass(inSettings)} hover:bg-surface-2 active:bg-surface-2`}
-          >
+          <Pressable className={`${rowClass(inSettings)} hover:bg-surface-2 active:bg-surface-2`}>
             <View className="flex-row items-center">
               <Feather
                 name="settings"

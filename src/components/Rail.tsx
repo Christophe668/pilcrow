@@ -87,6 +87,8 @@ export function Rail() {
   const visibleTags = (tags.data ?? []).slice(0, VISIBLE_TAGS);
   const overflowCount = (tags.data?.length ?? 0) - visibleTags.length;
 
+  const inSettings = segments.includes("settings");
+
   return (
     <ScrollView className="bg-bg" contentContainerClassName="px-5 pt-8 pb-12">
       <View className="flex-row items-center bg-surface border border-border rounded-md px-3 py-2 mb-7">
@@ -153,6 +155,23 @@ export function Rail() {
             <Text className="text-subtle text-xs italic">+{overflowCount} more tags</Text>
           </View>
         ) : null}
+      </View>
+
+      <View className="mt-8">
+        <Link href={"/(app)/settings" as Href} asChild>
+          <Pressable
+            className={`${rowClass(inSettings)} hover:bg-surface-2 active:bg-surface-2`}
+          >
+            <View className="flex-row items-center">
+              <Feather
+                name="settings"
+                size={14}
+                color={inSettings ? tokens.accent : tokens.muted}
+              />
+              <Text className={`${labelClass(inSettings)} ml-2`}>Settings</Text>
+            </View>
+          </Pressable>
+        </Link>
       </View>
     </ScrollView>
   );

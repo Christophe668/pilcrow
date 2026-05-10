@@ -4,6 +4,8 @@
  * 401 the session is unrecoverable — the caller should sign out.
  */
 
+import { proxiedFetch } from "@/api/http/web-proxy";
+
 export type ReadeckRequestArgs = {
   serverUrl: string;
   accessToken: string;
@@ -62,7 +64,7 @@ export async function rawRequest(args: ReadeckRequestArgs): Promise<Response> {
   if (args.body !== undefined) {
     init.body = JSON.stringify(args.body);
   }
-  const res = await fetch(buildUrl(args.serverUrl, args.path, args.query), init);
+  const res = await proxiedFetch(buildUrl(args.serverUrl, args.path, args.query), init);
   if (res.status === 401) {
     throw new ReadeckUnauthorizedError();
   }

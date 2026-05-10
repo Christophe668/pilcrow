@@ -27,7 +27,13 @@ export default tseslint.config(
   },
   // Metro/Babel configs and transformers are CommonJS by Expo convention.
   {
-    files: ["metro.config.js", "babel.config.js", "scripts/sql-transformer.js"],
+    files: [
+      "metro.config.js",
+      "babel.config.js",
+      "scripts/sql-transformer.js",
+      "scripts/dev-backend-proxy.js",
+    ],
+    languageOptions: { globals: { Buffer: "readonly", require: "readonly", module: "readonly" } },
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

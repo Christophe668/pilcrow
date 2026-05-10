@@ -1,3 +1,4 @@
+import { proxiedFetch } from "@/api/http/web-proxy";
 import type {
   DeviceAuthorizationResponse,
   OAuthClientCreate,
@@ -44,7 +45,7 @@ export class SlowDownError extends Error {
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await proxiedFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
@@ -129,7 +130,7 @@ export async function pollDeviceCode(args: {
  * request itself.
  */
 export async function revokeToken(args: { serverUrl: string; accessToken: string }): Promise<void> {
-  const res = await fetch(`${args.serverUrl}/api/oauth/revoke`, {
+  const res = await proxiedFetch(`${args.serverUrl}/api/oauth/revoke`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${args.accessToken}`,

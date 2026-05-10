@@ -11,6 +11,7 @@ const PER_PAGE = 100;
 function articleToRow(a: Article): Partial<ArticleRow> {
   return {
     id: Number(a.id),
+    backend_id: a.id,
     title: a.title,
     url: a.url,
     domain_name: a.domainName,
@@ -37,7 +38,12 @@ export async function runInitialSync(): Promise<void> {
   const tags = await backend.listTags();
   await upsertTags(
     db,
-    tags.map((t) => ({ id: Number(t.id), label: t.label, slug: t.slug })),
+    tags.map((t) => ({
+      id: Number(t.id),
+      backend_id: t.id,
+      label: t.label,
+      slug: t.slug,
+    })),
   );
 
   let page = 1;
@@ -90,7 +96,12 @@ export async function runIncrementalSync(): Promise<void> {
   const tags = await backend.listTags();
   await upsertTags(
     db,
-    tags.map((t) => ({ id: Number(t.id), label: t.label, slug: t.slug })),
+    tags.map((t) => ({
+      id: Number(t.id),
+      backend_id: t.id,
+      label: t.label,
+      slug: t.slug,
+    })),
   );
 
   let page = 1;

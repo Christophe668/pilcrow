@@ -9,6 +9,7 @@ import {
 import { clearPendingOp, deleteArticle } from "@/db/repos/articles";
 import { rewriteAnnotationId, purgeDeleted } from "@/db/repos/annotations";
 import { getBackend } from "@/api/backend";
+import type { DbDriver } from "@/db/driver";
 import { dataEvents } from "./events";
 
 export type DrainSummary = { processed: number; failed: number };
@@ -16,10 +17,11 @@ export type DrainSummary = { processed: number; failed: number };
 const BATCH = 25;
 
 /**
- * Outbox payloads keep their original numeric/0-1 shapes — they're
- * persisted to SQLite, so changing the schema would orphan in-flight
- * rows on existing installs. The drainer converts to the Backend
- * interface's normalized shape at the call boundary.
+ * Outbox payloads carry local primary keys (numeric, persisted to disk).
+ * The drainer translates each local id to the row's `backend_id` at
+ * call time so the same payload schema works against either Wallabag
+ * (where local id parses back to the server id) or Readeck (where
+ * local id is autoincrement and the backend id is a UUID).
  */
 type Payloads = {
   createEntry: { tempId: number; url: string; tags?: string[] };
@@ -38,6 +40,21 @@ type Payloads = {
   deleteAnnotation: { id: number };
 };
 
+async function lookupBackendId(
+  db: DbDriver,
+  table: "articles" | "tags" | "annotations",
+  localId: number,
+): Promise<string> {
+  const row = await db.get<{ backend_id: string | null }>(
+    `SELECT backend_id FROM ${table} WHERE id = ?`,
+    [localId],
+  );
+  if (!row || row.backend_id === null) {
+    throw new Error(`Missing backend_id for ${table}.${localId} — outbox row stale?`);
+  }
+  return row.backend_id;
+}
+
 async function processOne(row: OutboxRow): Promise<void> {
   const op = row.op as OutboxOp;
   const payload = JSON.parse(row.payload_json) as Payloads[OutboxOp];
@@ -48,32 +65,60 @@ async function processOne(row: OutboxRow): Promise<void> {
     case "createEntry": {
       const p = payload as Payloads["createEntry"];
       const real = await backend.createArticle(p.url, p.tags);
-      const realId = Number(real.id);
-      await db.run("DELETE FROM articles WHERE id = ?", [p.tempId]);
-      await db.run(
-        `INSERT INTO articles (id, backend_id, title, url, domain_name, created_at, updated_at, server_updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           backend_id = excluded.backend_id,
-           title = excluded.title,
-           updated_at = excluded.updated_at`,
-        [
-          realId,
-          real.id,
-          real.title,
-          real.url,
-          real.domainName,
-          real.createdAt,
-          real.updatedAt,
-          real.updatedAt,
-        ],
-      );
+      if (backend.capabilities.localIdMatchesBackendId) {
+        // Wallabag path: replace the temp row with one keyed on the
+        // server id, preserving the long-standing "local id == server id"
+        // invariant for Wallabag installs.
+        const realId = Number(real.id);
+        await db.run("DELETE FROM articles WHERE id = ?", [p.tempId]);
+        await db.run(
+          `INSERT INTO articles (id, backend_id, title, url, domain_name,
+              created_at, updated_at, server_updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+              backend_id = excluded.backend_id,
+              title = excluded.title,
+              updated_at = excluded.updated_at`,
+          [
+            realId,
+            real.id,
+            real.title,
+            real.url,
+            real.domainName,
+            real.createdAt,
+            real.updatedAt,
+            real.updatedAt,
+          ],
+        );
+      } else {
+        // Readeck path: promote the temp row in place — local id stays
+        // put, backend_id and metadata are filled in. Routes that
+        // navigated to /article/<tempId> keep working.
+        await db.run(
+          `UPDATE articles
+           SET backend_id = ?, title = ?, url = ?, domain_name = ?,
+               created_at = ?, updated_at = ?, server_updated_at = ?,
+               pending_op = NULL
+           WHERE id = ?`,
+          [
+            real.id,
+            real.title,
+            real.url,
+            real.domainName,
+            real.createdAt,
+            real.updatedAt,
+            real.updatedAt,
+            p.tempId,
+          ],
+        );
+      }
       dataEvents.emit({ kind: "articles" });
       return;
     }
     case "updateEntry": {
       const p = payload as Payloads["updateEntry"];
-      await backend.patchArticle(String(p.id), {
+      const backendId = await lookupBackendId(db, "articles", p.id);
+      await backend.patchArticle(backendId, {
         ...(p.is_starred !== undefined ? { isStarred: p.is_starred === 1 } : {}),
         ...(p.is_archived !== undefined ? { isArchived: p.is_archived === 1 } : {}),
         ...(p.tags !== undefined
@@ -92,26 +137,31 @@ async function processOne(row: OutboxRow): Promise<void> {
     }
     case "deleteEntry": {
       const p = payload as Payloads["deleteEntry"];
-      await backend.deleteArticle(String(p.id));
+      const backendId = await lookupBackendId(db, "articles", p.id);
+      await backend.deleteArticle(backendId);
       await deleteArticle(db, p.id);
       dataEvents.emit({ kind: "articles" });
       return;
     }
     case "addTag": {
       const p = payload as Payloads["addTag"];
-      await backend.addTagsToArticle(String(p.entryId), p.labels);
+      const backendId = await lookupBackendId(db, "articles", p.entryId);
+      await backend.addTagsToArticle(backendId, p.labels);
       dataEvents.emit({ kind: "article", id: p.entryId });
       return;
     }
     case "removeTag": {
       const p = payload as Payloads["removeTag"];
-      await backend.removeTagFromArticle(String(p.entryId), String(p.tagId));
+      const articleBackendId = await lookupBackendId(db, "articles", p.entryId);
+      const tagBackendId = await lookupBackendId(db, "tags", p.tagId);
+      await backend.removeTagFromArticle(articleBackendId, tagBackendId);
       dataEvents.emit({ kind: "article", id: p.entryId });
       return;
     }
     case "createAnnotation": {
       const p = payload as Payloads["createAnnotation"];
-      const real = await backend.createAnnotation(String(p.entryId), {
+      const articleBackendId = await lookupBackendId(db, "articles", p.entryId);
+      const real = await backend.createAnnotation(articleBackendId, {
         quote: p.quote,
         note: p.text,
         locators: p.ranges.map((r) => ({
@@ -122,19 +172,31 @@ async function processOne(row: OutboxRow): Promise<void> {
           endOffset: r.endOffset,
         })),
       });
-      await rewriteAnnotationId(db, p.tempId, Number(real.id), real.id);
+      // For Wallabag the real id parses back to an integer; for Readeck
+      // it's a short-uid, so we must keep the local PK as the temp id
+      // and only rewrite backend_id.
+      if (backend.capabilities.localIdMatchesBackendId) {
+        await rewriteAnnotationId(db, p.tempId, Number(real.id), real.id);
+      } else {
+        await db.run("UPDATE annotations SET backend_id = ?, pending_op = NULL WHERE id = ?", [
+          real.id,
+          p.tempId,
+        ]);
+      }
       dataEvents.emit({ kind: "annotations", articleId: p.entryId });
       return;
     }
     case "updateAnnotation": {
       const p = payload as Payloads["updateAnnotation"];
-      await backend.updateAnnotation(String(p.id), p.text);
+      const backendId = await lookupBackendId(db, "annotations", p.id);
+      await backend.updateAnnotation(backendId, p.text);
       await db.run("UPDATE annotations SET pending_op = NULL WHERE id = ?", [p.id]);
       return;
     }
     case "deleteAnnotation": {
       const p = payload as Payloads["deleteAnnotation"];
-      await backend.deleteAnnotation(String(p.id));
+      const backendId = await lookupBackendId(db, "annotations", p.id);
+      await backend.deleteAnnotation(backendId);
       await purgeDeleted(db, p.id);
       return;
     }

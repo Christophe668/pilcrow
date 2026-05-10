@@ -95,6 +95,75 @@ export async function findArticleByBackendId(
   ]);
 }
 
+export type ArticleUpsert = Omit<Partial<ArticleRow>, "id"> & {
+  /**
+   * Backend's identity for this article (Wallabag stringified id, or
+   * Readeck short-uid). Used as the resolution key — if a row already
+   * has this backend_id, it is updated in place. Required.
+   */
+  backend_id: string;
+  /**
+   * Optional preferred local primary key. Wallabag adapters pass this
+   * (parsed from the integer backend id) so existing rows keep their
+   * predictable local ids; Readeck adapters omit it and the autoincrement
+   * sequence assigns a new id.
+   */
+  id?: number;
+};
+
+/**
+ * Upserts a row keyed by `backend_id`, returning the local primary key
+ * (whether existing or newly assigned). The sync engine uses the
+ * returned id to attach tags, navigate to the article, and so on.
+ *
+ * - If a row with the given `backend_id` already exists: every supplied
+ *   column except `id` is written; the local id is preserved.
+ * - Otherwise inserts. If `id` is provided and free, uses it; if it
+ *   collides with an existing row (different backend_id), falls back to
+ *   autoincrement. If `id` is not provided, autoincrement.
+ */
+export async function upsertArticleByBackendId(db: DbDriver, row: ArticleUpsert): Promise<number> {
+  return db.transaction(async (tx) => {
+    const existing = await tx.get<{ id: number }>("SELECT id FROM articles WHERE backend_id = ?", [
+      row.backend_id,
+    ]);
+    if (existing) {
+      // Build dynamic UPDATE for whatever fields the caller supplied.
+      const cols = COLS.filter((c) => c !== "id" && (row as Partial<ArticleRow>)[c] !== undefined);
+      // backend_id is always present in `row`, so `cols` is non-empty.
+      const setClause = cols.map((c) => `${c} = ?`).join(", ");
+      await tx.run(`UPDATE articles SET ${setClause} WHERE id = ?`, [
+        ...cols.map((c) => (row as Partial<ArticleRow>)[c] as unknown),
+        existing.id,
+      ]);
+      return existing.id;
+    }
+    // INSERT path.
+    const cols = COLS.filter((c) => (row as Partial<ArticleRow>)[c] !== undefined);
+    const useHintId = row.id !== undefined && cols.includes("id");
+    if (useHintId) {
+      try {
+        const placeholders = cols.map(() => "?").join(", ");
+        await tx.run(
+          `INSERT INTO articles (${cols.join(", ")}) VALUES (${placeholders})`,
+          cols.map((c) => (row as Partial<ArticleRow>)[c] as unknown),
+        );
+        return row.id!;
+      } catch {
+        // The hint id collided with an existing row that has a *different*
+        // backend_id — fall through to autoincrement.
+      }
+    }
+    const insertCols = cols.filter((c) => c !== "id");
+    const placeholders = insertCols.map(() => "?").join(", ");
+    const result = await tx.run(
+      `INSERT INTO articles (${insertCols.join(", ")}) VALUES (${placeholders})`,
+      insertCols.map((c) => (row as Partial<ArticleRow>)[c] as unknown),
+    );
+    return Number(result.lastId);
+  });
+}
+
 /** Slim row for the article list. Excludes the full HTML body; `excerpt`
  * is a small SUBSTR taken in SQL so we never ship raw bodies into JS for
  * articles the user only sees in the list. */

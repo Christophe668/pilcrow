@@ -1,15 +1,14 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "@/db";
-import { getArticle, upsertArticles, type ArticleRow } from "@/db/repos/articles";
-import { tagsForArticle, attachTags, upsertTags } from "@/db/repos/tags";
+import { getArticle, upsertArticleByBackendId, type ArticleUpsert } from "@/db/repos/articles";
+import { tagsForArticle, attachTags, upsertTagsByBackendId } from "@/db/repos/tags";
 import { getBackend } from "@/api/backend";
-import type { Article } from "@/api/backend";
+import type { Article, Backend } from "@/api/backend";
 import { dataEvents } from "@/sync/events";
 
-function articleToRow(a: Article): Partial<ArticleRow> {
-  return {
-    id: Number(a.id),
+function articleToUpsert(a: Article, backend: Backend): ArticleUpsert {
+  const row: ArticleUpsert = {
     backend_id: a.id,
     title: a.title,
     url: a.url,
@@ -28,33 +27,42 @@ function articleToRow(a: Article): Partial<ArticleRow> {
     published_by: a.authors.length > 0 ? a.authors.join(", ") : null,
     server_updated_at: a.updatedAt,
   };
+  if (backend.capabilities.localIdMatchesBackendId) {
+    const n = Number(a.id);
+    if (Number.isFinite(n) && Number.isInteger(n)) row.id = n;
+  }
+  return row;
 }
 
 async function fetchOne(id: number) {
   const db = await getDb();
   let row = await getArticle(db, id);
 
-  if (row && row.content === null) {
-    const article = await getBackend()
-      .getArticle(String(id))
-      .catch(() => null);
+  if (row && row.content === null && row.backend_id !== null) {
+    const backend = getBackend();
+    const article = await backend.getArticle(row.backend_id).catch(() => null);
     if (article) {
-      await upsertArticles(db, [articleToRow(article)]);
+      await upsertArticleByBackendId(db, articleToUpsert(article, backend));
       if (article.tags.length > 0) {
-        await upsertTags(
+        const tagMap = await upsertTagsByBackendId(
           db,
-          article.tags.map((t) => ({
-            id: Number(t.id),
-            backend_id: t.id,
-            label: t.label,
-            slug: t.slug,
-          })),
+          article.tags.map((t) => {
+            const entry: { backend_id: string; label: string; slug: string; id?: number } = {
+              backend_id: t.id,
+              label: t.label,
+              slug: t.slug,
+            };
+            if (backend.capabilities.localIdMatchesBackendId) {
+              const n = Number(t.id);
+              if (Number.isFinite(n) && Number.isInteger(n)) entry.id = n;
+            }
+            return entry;
+          }),
         );
-        await attachTags(
-          db,
-          Number(article.id),
-          article.tags.map((t) => Number(t.id)),
-        );
+        const localTagIds = article.tags
+          .map((t) => tagMap.get(t.id))
+          .filter((x): x is number => x !== undefined);
+        if (localTagIds.length > 0) await attachTags(db, id, localTagIds);
       }
       row = await getArticle(db, id);
     }

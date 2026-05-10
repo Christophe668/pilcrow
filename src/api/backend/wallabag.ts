@@ -75,7 +75,7 @@ function annotationToBackend(a: WbAnnotation, articleId: string): BackendAnnotat
 
 export const WallabagBackend: Backend = {
   kind: "wallabag",
-  capabilities: { reloadArticle: true, annotations: true },
+  capabilities: { reloadArticle: true, annotations: true, localIdMatchesBackendId: true },
 
   async listArticles(args: ListArticlesArgs): Promise<ArticlesPage> {
     const result = await wbListEntries({

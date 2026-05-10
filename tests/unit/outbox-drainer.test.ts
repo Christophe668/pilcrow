@@ -46,10 +46,10 @@ beforeEach(async () => {
 
 describe("drainOutbox", () => {
   it("processes updateEntry success and clears row", async () => {
-    await db.run("INSERT INTO articles (id, url, pending_op) VALUES (?, ?, 'update')", [
-      9,
-      "https://x",
-    ]);
+    await db.run(
+      "INSERT INTO articles (id, backend_id, url, pending_op) VALUES (?, ?, ?, 'update')",
+      [9, "9", "https://x"],
+    );
     await enqueue(db, "updateEntry", { id: 9, is_starred: 1 });
 
     server.use(
@@ -90,10 +90,10 @@ describe("drainOutbox", () => {
   });
 
   it("retries on failure with backoff", async () => {
-    await db.run("INSERT INTO articles (id, url, pending_op) VALUES (?, ?, 'update')", [
-      9,
-      "https://x",
-    ]);
+    await db.run(
+      "INSERT INTO articles (id, backend_id, url, pending_op) VALUES (?, ?, ?, 'update')",
+      [9, "9", "https://x"],
+    );
     await enqueue(db, "updateEntry", { id: 9, is_starred: 1 });
 
     server.use(

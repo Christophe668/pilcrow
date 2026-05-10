@@ -42,8 +42,8 @@ your Wallabag server once and both plugins use it.
 - **Offline-first**: the article list is cached as JSON on disk and renders
   with no network. Sync is explicit (the **Sync now** button) or automatic on
   open: when the queue view is launched, the cached list paints
-  immediately, then a background sync runs if the *Auto-sync when WiFi is
-  on* toggle is enabled (default ON) and the cache is older than the
+  immediately, then a background sync runs if the _Auto-sync when WiFi is
+  on_ toggle is enabled (default ON) and the cache is older than the
   configurable threshold (default 10 min; set to 0 for "every open"). On a
   fresh install the cache is empty, so the first open triggers an immediate
   sync.
@@ -84,33 +84,33 @@ plugins/pilcrow.koplugin/
 
 A 10-minute sanity pass before each release.
 
-| # | Step | Expected |
-|---|------|----------|
-| 1 | First-run: enable plugin without configuring Wallabag, open the queue, tap Sync. | "Wallabag is not configured (missing: server_url)…" message; no crash. |
-| 2 | Configure credentials in the original Wallabag plugin, return to Pilcrow queue. | First-ever open: cached list (empty) paints, then "Syncing Wallabag…" runs automatically. After it finishes, articles appear. Tapping Sync afterward shows the success summary. |
-| 3 | Tap the status chip; pick *Starred*. | Chip updates to "Starred"; only starred articles appear. |
-| 3b | Open Tags…, tick two tags, Apply. | Two tag chips appear; only articles having both tags appear; subtitle reads "N results". |
-| 3c | Open Sort…, pick *Oldest first*. | Sort chip appears; rows are reordered. Tap the sort chip ✕ to reset. |
-| 4 | Type a search term that matches a known article. | Only matching rows appear; "Clear search" in the menu restores the list. |
-| 5 | Tap a row that has not been downloaded. | "Downloading article…" then opens the reader on the article's EPUB. |
-| 6 | Tap the same row again. | Opens immediately (cached). |
-| 7 | Reach the last page; ConfirmBox appears asking to mark read. | Yes → archives on server, removes from unread filter. |
-| 8 | Long-press a row → Star. | Star marker appears; row also visible under Starred filter. |
-| 9 | Long-press → Copy URL. | "Copied URL: …" message. |
-| 10 | Disconnect Wi-Fi, reopen the queue. | Cached rows render; tapping a non-downloaded row warns about offline state. |
-| 11 | Settings → Open Pilcrow on startup → restart KOReader. | Queue view is shown after startup (after the file manager initializes). |
-| 12 | Settings round-trip: change articles per sync to 5, close, reopen settings. | New value persisted. |
+| #   | Step                                                                             | Expected                                                                                                                                                                        |
+| --- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | First-run: enable plugin without configuring Wallabag, open the queue, tap Sync. | "Wallabag is not configured (missing: server_url)…" message; no crash.                                                                                                          |
+| 2   | Configure credentials in the original Wallabag plugin, return to Pilcrow queue.  | First-ever open: cached list (empty) paints, then "Syncing Wallabag…" runs automatically. After it finishes, articles appear. Tapping Sync afterward shows the success summary. |
+| 3   | Tap the status chip; pick _Starred_.                                             | Chip updates to "Starred"; only starred articles appear.                                                                                                                        |
+| 3b  | Open Tags…, tick two tags, Apply.                                                | Two tag chips appear; only articles having both tags appear; subtitle reads "N results".                                                                                        |
+| 3c  | Open Sort…, pick _Oldest first_.                                                 | Sort chip appears; rows are reordered. Tap the sort chip ✕ to reset.                                                                                                            |
+| 4   | Type a search term that matches a known article.                                 | Only matching rows appear; "Clear search" in the menu restores the list.                                                                                                        |
+| 5   | Tap a row that has not been downloaded.                                          | "Downloading article…" then opens the reader on the article's EPUB.                                                                                                             |
+| 6   | Tap the same row again.                                                          | Opens immediately (cached).                                                                                                                                                     |
+| 7   | Reach the last page; ConfirmBox appears asking to mark read.                     | Yes → archives on server, removes from unread filter.                                                                                                                           |
+| 8   | Long-press a row → Star.                                                         | Star marker appears; row also visible under Starred filter.                                                                                                                     |
+| 9   | Long-press → Copy URL.                                                           | "Copied URL: …" message.                                                                                                                                                        |
+| 10  | Disconnect Wi-Fi, reopen the queue.                                              | Cached rows render; tapping a non-downloaded row warns about offline state.                                                                                                     |
+| 11  | Settings → Open Pilcrow on startup → restart KOReader.                           | Queue view is shown after startup (after the file manager initializes).                                                                                                         |
+| 12  | Settings round-trip: change articles per sync to 5, close, reopen settings.      | New value persisted.                                                                                                                                                            |
 
 ## Storage
 
-| What | Where |
-|------|-------|
-| Article metadata cache | `<data_dir>/pilcrow/cache.json` |
-| Downloaded EPUBs | `<data_dir>/pilcrow/articles/` (overrideable in Settings) |
-| Preview thumbnails | `<data_dir>/pilcrow/images/<id>.jpg` |
-| Bundled CSS tweak (auto-installed) | `<data_dir>/styletweaks/wallabag-code.css` |
-| Plugin settings | `<settings_dir>/pilcrow.lua` |
-| **Shared credentials (read-only here)** | `<settings_dir>/wallabag.lua` |
+| What                                    | Where                                                     |
+| --------------------------------------- | --------------------------------------------------------- |
+| Article metadata cache                  | `<data_dir>/pilcrow/cache.json`                           |
+| Downloaded EPUBs                        | `<data_dir>/pilcrow/articles/` (overrideable in Settings) |
+| Preview thumbnails                      | `<data_dir>/pilcrow/images/<id>.jpg`                      |
+| Bundled CSS tweak (auto-installed)      | `<data_dir>/styletweaks/wallabag-code.css`                |
+| Plugin settings                         | `<settings_dir>/pilcrow.lua`                              |
+| **Shared credentials (read-only here)** | `<settings_dir>/wallabag.lua`                             |
 
 ## Code-block styling
 
@@ -163,7 +163,7 @@ These were scoped out of v1 to keep the patch shippable. PRs welcome.
   Menu-driven layout uses one font with right-aligned `mandatory` text.
 - **Tag editing** per article.
 - **Replacing the file manager as the startup screen.** Currently we open the
-  queue *after* the file manager has loaded; KOReader's startup-screen choice
+  queue _after_ the file manager has loaded; KOReader's startup-screen choice
   isn't pluggable without a core change.
 
 ## Running the unit tests

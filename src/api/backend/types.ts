@@ -96,6 +96,15 @@ export type CreateAnnotationInput = {
 export type Capabilities = {
   reloadArticle: boolean;
   annotations: boolean;
+  /**
+   * Whether the backend's external IDs are integers that can safely
+   * double as local SQLite primary keys. Wallabag: `true`; Readeck: `false`.
+   * The sync engine reads this to decide whether to pin local id =
+   * Number(backend_id) (preserving today's Wallabag semantics) or to
+   * let SQLite autoincrement assign a new local id (Readeck UUIDs
+   * can't be used as INTEGER PKs).
+   */
+  localIdMatchesBackendId: boolean;
 };
 
 export interface Backend {

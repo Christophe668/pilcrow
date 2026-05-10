@@ -92,12 +92,10 @@ describe("runIncrementalSync", () => {
   });
 
   it("upserts updated entries", async () => {
-    await db.run("INSERT INTO articles (id, url, title, updated_at) VALUES (?, ?, ?, ?)", [
-      50,
-      "https://x/50",
-      "Old",
-      "2026-04-01T00:00:00Z",
-    ]);
+    await db.run(
+      "INSERT INTO articles (id, backend_id, url, title, updated_at) VALUES (?, ?, ?, ?, ?)",
+      [50, "50", "https://x/50", "Old", "2026-04-01T00:00:00Z"],
+    );
     server.use(
       http.get("https://wb.test/api/entries.json", () =>
         HttpResponse.json({

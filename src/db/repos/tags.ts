@@ -25,6 +25,67 @@ export async function findTagByBackendId(db: DbDriver, backendId: string): Promi
   return db.get<Tag>("SELECT id, label, slug FROM tags WHERE backend_id = ?", [backendId]);
 }
 
+export type TagUpsertByBackendId = {
+  backend_id: string;
+  label: string;
+  slug: string;
+  /** Optional preferred local id; same contract as ArticleUpsert.id. */
+  id?: number;
+};
+
+/**
+ * Upserts a batch of tags keyed by `backend_id`. Returns a map from
+ * each input's `backend_id` to the resulting local id, which the
+ * sync engine uses to build the `article_tags` join rows.
+ */
+export async function upsertTagsByBackendId(
+  db: DbDriver,
+  tags: readonly TagUpsertByBackendId[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (tags.length === 0) return out;
+  await db.transaction(async (tx) => {
+    for (const t of tags) {
+      const existing = await tx.get<{ id: number }>("SELECT id FROM tags WHERE backend_id = ?", [
+        t.backend_id,
+      ]);
+      if (existing) {
+        await tx.run("UPDATE tags SET label = ?, slug = ? WHERE id = ?", [
+          t.label,
+          t.slug,
+          existing.id,
+        ]);
+        out.set(t.backend_id, existing.id);
+        continue;
+      }
+      // INSERT path. Try the hint id; if it collides, fall back to
+      // autoincrement so the operation can't fail just because the
+      // local sequence drifted from server ids.
+      if (t.id !== undefined) {
+        try {
+          await tx.run("INSERT INTO tags (id, backend_id, label, slug) VALUES (?, ?, ?, ?)", [
+            t.id,
+            t.backend_id,
+            t.label,
+            t.slug,
+          ]);
+          out.set(t.backend_id, t.id);
+          continue;
+        } catch {
+          // fall through
+        }
+      }
+      const r = await tx.run("INSERT INTO tags (backend_id, label, slug) VALUES (?, ?, ?)", [
+        t.backend_id,
+        t.label,
+        t.slug,
+      ]);
+      out.set(t.backend_id, Number(r.lastId));
+    }
+  });
+  return out;
+}
+
 export async function listTags(db: DbDriver): Promise<Tag[]> {
   return db.all<Tag>("SELECT id, label, slug FROM tags ORDER BY slug");
 }

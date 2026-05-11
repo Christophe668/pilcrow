@@ -1,0 +1,46 @@
+/*
+ * Pilcrow: code-block styling for Wallabag articles.
+ *
+ * Renders <pre> blocks in a framed, smaller monospace font with
+ * page-friendly wrapping; inline <code> spans get a subtle box.
+ *
+ * Installed by the Pilcrow plugin into
+ * <data_dir>/styletweaks/ and auto-enabled per article when the
+ * "Apply code-block styling" setting is on (default).
+ */
+
+pre,
+code,
+samp,
+kbd,
+tt {
+  font-family: monospace !important;
+  font-size: 0.65em !important;
+  line-height: 1.25 !important;
+}
+
+pre {
+  background-color: #f3f3f3;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  padding: 0.5em 0.7em;
+  margin: 0.8em 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  page-break-inside: avoid;
+}
+
+code {
+  background-color: #f3f3f3;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  padding: 0.05em 0.3em;
+}
+
+/* When <code> sits inside <pre>, drop the inner inline styling so the
+ * outer block frame is the only one shown. */
+pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}

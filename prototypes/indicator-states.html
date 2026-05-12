@@ -1,0 +1,1354 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Read-state indicator prototypes — wallabag</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #fbf8f4;
+        --surface: #ffffff;
+        --surface-2: #f7f3ee;
+        --fg: #1c140e;
+        --muted: #5e5650;
+        --subtle: #8c857f;
+        --border: #e6e0da;
+        --border-strong: #c9c3bc;
+        --accent: #c1291b;
+        --accent-ink: #890000;
+        --accent-soft: #ffe5df;
+        --serif: "Newsreader", "Iowan Old Style", "Charter", Georgia, serif;
+        --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: var(--sans);
+        background: var(--bg);
+        color: var(--fg);
+        -webkit-text-size-adjust: 100%;
+      }
+      .page {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 64px 24px 96px;
+      }
+      .lede {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 32px;
+        margin-bottom: 48px;
+      }
+      h1 {
+        font-family: var(--serif);
+        font-size: 48px;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        font-weight: 600;
+        margin: 0 0 12px;
+        text-wrap: balance;
+      }
+      .lede p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.55;
+        max-width: 640px;
+      }
+      .variant {
+        margin-bottom: 64px;
+      }
+      .variant-head {
+        margin-bottom: 16px;
+      }
+      .variant-name {
+        font-family: var(--mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1.6px;
+        color: var(--accent);
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-family: var(--serif);
+        font-size: 28px;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .variant-desc {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        margin: 0 0 20px;
+        max-width: 640px;
+      }
+
+      /* ---- card ---- */
+      .list {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow:
+          0 1px 0 rgba(0, 0, 0, 0.02),
+          0 4px 24px -16px rgba(0, 0, 0, 0.08);
+      }
+      .card {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+      .card:last-child {
+        border-bottom: 0;
+      }
+      .thumb {
+        flex: 0 0 64px;
+        width: 64px;
+        height: 64px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--accent-soft);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        position: relative;
+      }
+      .thumb-glyph {
+        font-family: var(--serif);
+        color: var(--accent-ink);
+        font-size: 28px;
+        font-weight: 600;
+      }
+      .body {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .title {
+        font-family: var(--serif);
+        font-size: 19px;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        font-weight: 600;
+        color: var(--fg);
+        margin: 0 0 4px;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .excerpt {
+        font-size: 14px;
+        line-height: 1.4;
+        color: var(--muted);
+        margin: 0 0 8px;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0;
+        font-size: 12px;
+        color: var(--subtle);
+      }
+      .meta-sep::before {
+        content: "  ·  ";
+      }
+      .tag {
+        color: var(--accent-ink);
+        font-style: italic;
+      }
+      .tag + .tag {
+        margin-left: 8px;
+      }
+      .star {
+        color: var(--accent);
+        margin-left: 8px;
+      }
+
+      /* ---- baseline ---- */
+      .baseline .dot {
+        color: var(--accent);
+        margin-right: 4px;
+      }
+      .baseline .pct {
+        color: var(--accent-ink);
+        font-style: italic;
+      }
+      .baseline .read {
+        color: var(--subtle);
+        font-style: italic;
+      }
+      .baseline .read-card .title,
+      .baseline .read-card .excerpt {
+        color: var(--muted);
+      }
+      .baseline .read-card .excerpt {
+        color: var(--subtle);
+      }
+
+      /* ---- A: typographic recession only ---- */
+      .typo .unread .title {
+        font-weight: 700;
+      }
+      .typo .ip .title {
+        font-weight: 600;
+        opacity: 0.92;
+      }
+      .typo .read-card .title {
+        font-weight: 500;
+        opacity: 0.55;
+      }
+      .typo .read-card .excerpt {
+        opacity: 0.45;
+      }
+      .typo .meta-state {
+        display: none;
+      } /* state cue lives in type weight */
+
+      /* ---- B: column-rule progress ---- */
+      .rule .card {
+        padding-left: 28px;
+      }
+      .rule .card-rule {
+        position: absolute;
+        left: 16px;
+        top: 18px;
+        bottom: 18px;
+        width: 2px;
+        border-radius: 1px;
+        background: var(--border-strong);
+        overflow: hidden;
+      }
+      .rule .card-rule-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: var(--accent);
+        border-radius: 1px;
+      }
+      .rule .read-card .card-rule {
+        display: none;
+      } /* read = quiet edge */
+      .rule .read-card .title,
+      .rule .read-card .excerpt {
+        color: var(--muted);
+      }
+      .rule .read-card .excerpt {
+        color: var(--subtle);
+      }
+      .rule .meta-pct,
+      .rule .meta-tick {
+        display: none;
+      } /* edge rule already says it */
+
+      /* ---- C: time-left phrasing ---- */
+      .timeleft .dot {
+        color: var(--accent);
+        margin-right: 4px;
+      }
+      .timeleft .left {
+        color: var(--accent-ink);
+        font-style: italic;
+      }
+      .timeleft .read {
+        color: var(--subtle);
+        font-style: italic;
+      }
+      .timeleft .read-card .title,
+      .timeleft .read-card .excerpt {
+        color: var(--muted);
+      }
+      .timeleft .read-card .excerpt {
+        color: var(--subtle);
+      }
+
+      /* ---- D: corner badge on thumb ---- */
+      .badge .badge-mark {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--bg);
+      }
+      .badge .badge-arc {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+      }
+      .badge .badge-tick {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        color: var(--muted);
+        font-size: 8px;
+        line-height: 12px;
+        text-align: center;
+        font-weight: 700;
+      }
+      .badge .read-card .title,
+      .badge .read-card .excerpt {
+        color: var(--muted);
+      }
+      .badge .read-card .excerpt {
+        color: var(--subtle);
+      }
+      .badge .meta-state {
+        display: none;
+      } /* state lives on the thumb */
+
+      /* ---- E: text decoration ---- */
+      .deco .ip .title {
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        text-decoration-color: var(--accent);
+        text-underline-offset: 4px;
+      }
+      .deco .read-card .title {
+        color: var(--muted);
+      }
+      .deco .read-card .title::before {
+        content: "";
+        display: inline-block;
+        width: 12px;
+        height: 1px;
+        background: var(--muted);
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+      .deco .read-card .excerpt {
+        color: var(--subtle);
+      }
+      .deco .meta-state {
+        display: none;
+      }
+
+      /* ---- F: background tint for in-progress ---- */
+      .tint .ip {
+        background: linear-gradient(90deg, rgba(255, 229, 223, 0.45), transparent 60%);
+      }
+      .tint .ip .title {
+        color: var(--fg);
+      }
+      .tint .read-card .title,
+      .tint .read-card .excerpt {
+        color: var(--muted);
+      }
+      .tint .read-card .excerpt {
+        color: var(--subtle);
+      }
+      .tint .pct {
+        color: var(--accent-ink);
+        font-style: italic;
+      }
+      .tint .read {
+        color: var(--subtle);
+        font-style: italic;
+      }
+
+      /* ---- G: title bullet ---- */
+      .lede-mark .title::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        margin-right: 8px;
+        vertical-align: middle;
+        transform: translateY(-2px);
+      }
+      .lede-mark .read-card .title::before {
+        display: none;
+      }
+      .lede-mark .ip .title::before {
+        background: var(--accent-ink);
+      }
+      .lede-mark .read-card .title {
+        color: var(--muted);
+      }
+      .lede-mark .read-card .excerpt {
+        color: var(--subtle);
+      }
+      .lede-mark .pct {
+        color: var(--accent-ink);
+        font-style: italic;
+      }
+      .lede-mark .read {
+        color: var(--subtle);
+        font-style: italic;
+      }
+
+      /* combined — what I'd actually ship: B + C ---- */
+      .combo .card {
+        padding-left: 28px;
+      }
+      .combo .card-rule {
+        position: absolute;
+        left: 16px;
+        top: 18px;
+        bottom: 18px;
+        width: 2px;
+        border-radius: 1px;
+        background: var(--border-strong);
+        overflow: hidden;
+      }
+      .combo .card-rule-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: var(--accent);
+        border-radius: 1px;
+      }
+      .combo .read-card .card-rule {
+        display: none;
+      }
+      .combo .read-card .title,
+      .combo .read-card .excerpt {
+        color: var(--muted);
+      }
+      .combo .read-card .excerpt {
+        color: var(--subtle);
+      }
+      .combo .left {
+        color: var(--accent-ink);
+        font-style: italic;
+      }
+      .combo .read {
+        color: var(--subtle);
+        font-style: italic;
+      }
+
+      /* responsive — keep prototype usable on phones */
+      @media (max-width: 540px) {
+        .page {
+          padding: 32px 16px 64px;
+        }
+        h1 {
+          font-size: 36px;
+        }
+        h2 {
+          font-size: 22px;
+        }
+        .card {
+          padding: 16px;
+          gap: 12px;
+        }
+        .thumb {
+          flex-basis: 52px;
+          width: 52px;
+          height: 52px;
+        }
+        .thumb-glyph {
+          font-size: 22px;
+        }
+        .title {
+          font-size: 17px;
+        }
+      }
+
+      /* note callout */
+      .note {
+        margin: 12px 0 0;
+        padding: 10px 14px;
+        background: var(--surface-2);
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .note strong {
+        color: var(--fg);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="lede">
+        <h1>Read-state indicator prototypes</h1>
+        <p>
+          Eight different ways to mark <em>unread / in-progress / read</em> on the article list.
+          Same five sample cards in each, rendered with the live editorial typography and palette so
+          the visual weight matches the real app. Scroll through and pick the one that reads
+          cleanest at a glance — or send a mix.
+        </p>
+      </header>
+
+      <!-- ============ BASELINE — current ship ============ -->
+      <section class="variant baseline">
+        <div class="variant-head">
+          <p class="variant-name">currently shipped</p>
+          <h2>Baseline — accent dot + meta-line text</h2>
+          <p class="variant-desc">
+            What's in the app right now. Accent <code>●</code> leads the meta line for unread and
+            in-progress; archived loses the dot, fades the title, and gains a <code>✓ read</code>
+            suffix.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span class="dot">●</span><span>kdnuggets.com · 12 min · saved 3d ago</span>
+                <span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span class="dot">●</span><span>bytebytego.com · 4 min · saved 5d ago</span>
+                <span class="meta-sep pct">60% read</span>
+                <span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta">
+                <span class="dot">●</span><span>distrib.dev · 18 min · saved 1w ago</span>
+                <span class="meta-sep pct">25% read</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta">
+                <span>anthropic.com · 6 min · saved 12d ago</span>
+                <span class="meta-sep read">✓ read</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span>
+                <span class="meta-sep read">✓ read</span>
+                <span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> Three discrete signals (dot · text · type weight). Clear and
+          learnable, but the meta line gets busy on cards with many tags.
+        </p>
+      </section>
+
+      <!-- ============ A — TYPOGRAPHIC RECESSION ============ -->
+      <section class="variant typo">
+        <div class="variant-head">
+          <p class="variant-name">option a</p>
+          <h2>Typographic recession only</h2>
+          <p class="variant-desc">
+            No glyphs, no extra meta words. Title weight goes from <strong>700</strong> (unread) to
+            <strong>600</strong> (in-progress, slight fade) to <strong>500</strong> with 55% opacity
+            (read). The most magazine-like option — read items physically lean back.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span>kdnuggets.com · 12 min · saved 3d ago</span
+                ><span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span>bytebytego.com · 4 min · saved 5d ago</span
+                ><span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta"><span>distrib.dev · 18 min · saved 1w ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta"><span>anthropic.com · 6 min · saved 12d ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span
+                ><span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> Most editorial of the bunch. Pure aesthetics, zero decoration.
+          Cost: in-progress and unread look subtly different (600 vs 700) — some users may not
+          notice.
+        </p>
+      </section>
+
+      <!-- ============ B — COLUMN RULE PROGRESS ============ -->
+      <section class="variant rule">
+        <div class="variant-head">
+          <p class="variant-name">option b</p>
+          <h2>Column-rule progress on the left edge</h2>
+          <p class="variant-desc">
+            A 2px accent rule tucked into the card's left margin, fill height = reading depth.
+            Echoes the column rule we built into the article reader — same metaphor at two scales.
+            Read cards lose the rule entirely (reading is "done").
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <span class="card-rule"><span class="card-rule-fill" style="height: 0%"></span></span>
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span>kdnuggets.com · 12 min · saved 3d ago</span
+                ><span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <span class="card-rule"><span class="card-rule-fill" style="height: 60%"></span></span>
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span>bytebytego.com · 4 min · saved 5d ago</span
+                ><span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <span class="card-rule"><span class="card-rule-fill" style="height: 25%"></span></span>
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta"><span>distrib.dev · 18 min · saved 1w ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta"><span>anthropic.com · 6 min · saved 12d ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span
+                ><span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> Most distinctive option. Communicates progress richly without
+          cluttering the meta. Empty rule on unread reads as "you haven't started this rule yet" —
+          shape & weight do all the work.
+        </p>
+      </section>
+
+      <!-- ============ C — TIME LEFT PHRASING ============ -->
+      <section class="variant timeleft">
+        <div class="variant-head">
+          <p class="variant-name">option c</p>
+          <h2>"X min left" instead of "X% read"</h2>
+          <p class="variant-desc">
+            Same dot-and-text approach as the baseline, but flip the in-progress phrasing from
+            <em>60% read</em> to <em>3 min left</em>. Same data, more actionable — readers think in
+            time-to-finish, not depth-percentage.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span class="dot">●</span><span>kdnuggets.com · 12 min · saved 3d ago</span>
+                <span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span class="dot">●</span><span>bytebytego.com · 4 min · saved 5d ago</span>
+                <span class="meta-sep left">2 min left</span>
+                <span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta">
+                <span class="dot">●</span><span>distrib.dev · 18 min · saved 1w ago</span>
+                <span class="meta-sep left">14 min left</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta">
+                <span>anthropic.com · 6 min · saved 12d ago</span>
+                <span class="meta-sep read">✓ read</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span>
+                <span class="meta-sep read">✓ read</span>
+                <span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> Tiny implementation cost (one string change). Better mental
+          model — "I have 14 minutes left in this article" is more actionable than "25% read".
+        </p>
+      </section>
+
+      <!-- ============ D — CORNER BADGE ============ -->
+      <section class="variant badge">
+        <div class="variant-head">
+          <p class="variant-name">option d</p>
+          <h2>Corner badge on the thumbnail</h2>
+          <p class="variant-desc">
+            Move the state indicator off the meta line entirely. Tiny corner badge on the 64px
+            thumbnail: solid dot for unread, arc for in-progress (visualises percent), small ✓ for
+            read. Pairs the cue with the article's "identity" — its image — instead of cramming it
+            into the citation.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <div class="thumb">
+              <span class="thumb-glyph">H</span>
+              <span class="badge-mark"></span>
+            </div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span>kdnuggets.com · 12 min · saved 3d ago</span
+                ><span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb">
+              <img src="https://picsum.photos/seed/code/64" alt="" />
+              <svg class="badge-arc" width="22" height="22" viewBox="0 0 22 22">
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="9"
+                  fill="var(--bg)"
+                  stroke="var(--border-strong)"
+                  stroke-width="1"
+                />
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="9"
+                  fill="none"
+                  stroke="var(--accent)"
+                  stroke-width="3"
+                  stroke-dasharray="56.5"
+                  stroke-dashoffset="22.6"
+                  transform="rotate(-90 11 11)"
+                />
+              </svg>
+            </div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span>bytebytego.com · 4 min · saved 5d ago</span
+                ><span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb">
+              <span class="thumb-glyph">E</span>
+              <svg class="badge-arc" width="22" height="22" viewBox="0 0 22 22">
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="9"
+                  fill="var(--bg)"
+                  stroke="var(--border-strong)"
+                  stroke-width="1"
+                />
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="9"
+                  fill="none"
+                  stroke="var(--accent)"
+                  stroke-width="3"
+                  stroke-dasharray="56.5"
+                  stroke-dashoffset="42.4"
+                  transform="rotate(-90 11 11)"
+                />
+              </svg>
+            </div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta"><span>distrib.dev · 18 min · saved 1w ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb">
+              <span class="thumb-glyph">N</span>
+              <span class="badge-tick">✓</span>
+            </div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta"><span>anthropic.com · 6 min · saved 12d ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb">
+              <span class="thumb-glyph">W</span>
+              <span class="badge-tick">✓</span>
+            </div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span
+                ><span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> Frees up the meta line. Cost: another visual element to design
+          carefully (badge size against arbitrary preview images), and pulls the eye to the thumb
+          rather than the title.
+        </p>
+      </section>
+
+      <!-- ============ E — TEXT DECORATION ============ -->
+      <section class="variant deco">
+        <div class="variant-head">
+          <p class="variant-name">option e</p>
+          <h2>Text decoration on the title</h2>
+          <p class="variant-desc">
+            Dotted underline (accent) on in-progress titles. A horizontal rule prefix on read titles
+            — no actual strikethrough, which would read as "deleted". Editorial precedent in
+            newspapers' "for the record" sections.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span>kdnuggets.com · 12 min · saved 3d ago</span
+                ><span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span>bytebytego.com · 4 min · saved 5d ago</span
+                ><span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta"><span>distrib.dev · 18 min · saved 1w ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta"><span>anthropic.com · 6 min · saved 12d ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span
+                ><span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> Distinctive and editorial. Risk: the dotted underline can read
+          as "this is a link" on the web. The hr-prefix on read titles is unusual — could feel
+          quirky or wrong depending on taste.
+        </p>
+      </section>
+
+      <!-- ============ F — BACKGROUND TINT ============ -->
+      <section class="variant tint">
+        <div class="variant-head">
+          <p class="variant-name">option f</p>
+          <h2>Lean in: tint the in-progress cards</h2>
+          <p class="variant-desc">
+            Inverts the "make read items recede" approach — instead,
+            <em>make in-progress items lean forward</em>. Soft accent-soft gradient wash on cards
+            you've started. Read cards still fade the title.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span>kdnuggets.com · 12 min · saved 3d ago</span
+                ><span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span>bytebytego.com · 4 min · saved 5d ago</span
+                ><span class="meta-sep pct">60% read</span><span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta">
+                <span>distrib.dev · 18 min · saved 1w ago</span
+                ><span class="meta-sep pct">25% read</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta">
+                <span>anthropic.com · 6 min · saved 12d ago</span
+                ><span class="meta-sep read">✓ read</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span
+                ><span class="meta-sep read">✓ read</span
+                ><span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> The "unfinished business" cards pop. Cost: the tint can feel
+          heavy in a list dominated by in-progress items, and may clash with theme colours other
+          than the cream default.
+        </p>
+      </section>
+
+      <!-- ============ G — TITLE BULLET ============ -->
+      <section class="variant lede-mark">
+        <div class="variant-head">
+          <p class="variant-name">option g</p>
+          <h2>Bullet on the title itself</h2>
+          <p class="variant-desc">
+            Lead the title with a small accent dot for unread, accent-ink (darker) for in-progress.
+            Read items lose the bullet entirely. Couples the cue to the content (the title) instead
+            of burying it in the meta soup.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span>kdnuggets.com · 12 min · saved 3d ago</span
+                ><span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span>bytebytego.com · 4 min · saved 5d ago</span
+                ><span class="meta-sep pct">60% read</span><span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta">
+                <span>distrib.dev · 18 min · saved 1w ago</span
+                ><span class="meta-sep pct">25% read</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta">
+                <span>anthropic.com · 6 min · saved 12d ago</span
+                ><span class="meta-sep read">✓ read</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span
+                ><span class="meta-sep read">✓ read</span
+                ><span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="note">
+          <strong>Trade-off:</strong> The cue lives where the eye lands first. Cost: the bullet
+          shifts the title's optical alignment slightly — long-form designers historically dislike
+          anything in front of a title.
+        </p>
+      </section>
+
+      <!-- ============ COMBO — recommendation ============ -->
+      <section class="variant combo">
+        <div class="variant-head">
+          <p class="variant-name">recommendation</p>
+          <h2>Combo: column rule (B) + time-left phrasing (C)</h2>
+          <p class="variant-desc">
+            What I'd actually ship. The column-rule does the visual heavy lifting (most distinctive,
+            mirrors the article reader). The "X min left" phrasing only appears for in-progress
+            cards in the meta, giving an actionable readout for the cards that need it. Read cards
+            get neither rule nor extra meta — pure typographic recession.
+          </p>
+        </div>
+        <div class="list">
+          <article class="card unread">
+            <span class="card-rule"><span class="card-rule-fill" style="height: 0%"></span></span>
+            <div class="thumb"><span class="thumb-glyph">H</span></div>
+            <div class="body">
+              <h3 class="title">How to Become an AI Engineer in 2026 — A Self-Study Roadmap</h3>
+              <p class="excerpt">
+                A pragmatic walkthrough of what to learn, in what order, with the tooling that's
+                actually used in production teams today.
+              </p>
+              <div class="meta">
+                <span>kdnuggets.com · 12 min · saved 3d ago</span
+                ><span class="meta-sep tag">#ai</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <span class="card-rule"><span class="card-rule-fill" style="height: 60%"></span></span>
+            <div class="thumb"><img src="https://picsum.photos/seed/code/64" alt="" /></div>
+            <div class="body">
+              <h3 class="title">Good Code vs. Bad Code — ByteByteGo Newsletter</h3>
+              <p class="excerpt">
+                In our newsletter, we've mainly focused on system designs. This time, we're
+                switching gears to a topic just as crucial: the code itself.
+              </p>
+              <div class="meta">
+                <span>bytebytego.com · 4 min · saved 5d ago</span
+                ><span class="meta-sep left">2 min left</span
+                ><span class="meta-sep tag">#design</span>
+              </div>
+            </div>
+          </article>
+          <article class="card ip">
+            <span class="card-rule"><span class="card-rule-fill" style="height: 25%"></span></span>
+            <div class="thumb"><span class="thumb-glyph">E</span></div>
+            <div class="body">
+              <h3 class="title">Edge cases in distributed systems</h3>
+              <p class="excerpt">
+                A field guide to the failure modes that only show up under contention, partial
+                failure, and clock skew. The kind of bugs that get worse the longer you ignore them.
+              </p>
+              <div class="meta">
+                <span>distrib.dev · 18 min · saved 1w ago</span
+                ><span class="meta-sep left">14 min left</span>
+              </div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">N</span></div>
+            <div class="body">
+              <h3 class="title">Notes on Anthropic's residency program</h3>
+              <p class="excerpt">
+                A short piece on the residency structure, mentorship style, and what kinds of
+                projects residents tend to work on during their first six months.
+              </p>
+              <div class="meta"><span>anthropic.com · 6 min · saved 12d ago</span></div>
+            </div>
+          </article>
+          <article class="card read-card">
+            <div class="thumb"><span class="thumb-glyph">W</span></div>
+            <div class="body">
+              <h3 class="title">Why TypeScript's type system isn't sound</h3>
+              <p class="excerpt">
+                A friendly explanation of why <code>any</code>, variance bivariance, and structural
+                subtyping all conspire to let unsound programs typecheck.
+              </p>
+              <div class="meta">
+                <span>overreacted.io · 9 min · saved 2mo ago</span
+                ><span class="meta-sep tag">#typescript</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

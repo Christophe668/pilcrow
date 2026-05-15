@@ -45,11 +45,14 @@ local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local _ = require("gettext")
 
--- 120 x 80 logical pixels @ native (Kobo 1264x1680) → comfortable hero-image preview.
-local THUMB_W = Screen:scaleBySize(120)
-local THUMB_H = Screen:scaleBySize(80)
+-- Compact thumbnail: 96 x 64. The previous 120 x 80 stretched each
+-- row to ~210px and capped the queue at 4–5 articles per page on a
+-- Libra 2; this size keeps the preview legible while fitting roughly
+-- 7 rows per page.
+local THUMB_W = Screen:scaleBySize(96)
+local THUMB_H = Screen:scaleBySize(64)
 -- Right column reserved for progress + status. Empty when no progress.
-local RIGHT_COL_W = Screen:scaleBySize(72)
+local RIGHT_COL_W = Screen:scaleBySize(64)
 
 local ArticleCard = InputContainer:extend{
     -- Required
@@ -80,13 +83,6 @@ end
 
 function ArticleCard:_buildThumbnail()
     local article = (self.entry and self.entry.article) or {}
-    local box = FrameContainer:new{
-        bordersize = Size.border.thin,
-        padding = 0,
-        margin = 0,
-        background = Blitbuffer.COLOR_WHITE,
-        dim = self.entry and self.entry.dim,
-    }
 
     if image_file_readable(article.image_path) then
         local ok, widget = pcall(ImageWidget.new, ImageWidget, {
@@ -98,27 +94,39 @@ function ArticleCard:_buildThumbnail()
             file_do_cache = false,
         })
         if ok and widget then
-            box[1] = CenterContainer:new{
-                dimen = Geom:new{ w = THUMB_W, h = THUMB_H },
-                widget,
+            return FrameContainer:new{
+                bordersize = Size.border.thin,
+                padding = 0,
+                margin = 0,
+                background = Blitbuffer.COLOR_WHITE,
+                dim = self.entry and self.entry.dim,
+                CenterContainer:new{
+                    dimen = Geom:new{ w = THUMB_W, h = THUMB_H },
+                    widget,
+                },
             }
-            return box
         else
             logger.dbg("pilcrow: failed to render", article.image_path, widget)
         end
     end
 
-    -- Placeholder glyph for articles without (or with un-decodable) preview.
-    local placeholder = TextWidget:new{
-        text = "📄",
-        face = Font:getFace("smallinfofont"),
-        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+    -- Empty light-grey well for articles without (or with un-decodable)
+    -- preview. The previous design used a `📄` glyph, but Noto Sans —
+    -- KOReader's bundled UI font — doesn't carry that codepoint, so it
+    -- fell back to the "missing glyph" box (the "?" the user saw).
+    -- A bare filled rectangle reads as "no preview" without any glyph
+    -- that may or may not render.
+    return FrameContainer:new{
+        bordersize = Size.border.thin,
+        padding = 0,
+        margin = 0,
+        background = Blitbuffer.COLOR_LIGHT_GRAY,
+        dim = self.entry and self.entry.dim,
+        CenterContainer:new{
+            dimen = Geom:new{ w = THUMB_W, h = THUMB_H },
+            HorizontalSpan:new{ width = 0 },
+        },
     }
-    box[1] = CenterContainer:new{
-        dimen = Geom:new{ w = THUMB_W, h = THUMB_H },
-        placeholder,
-    }
-    return box
 end
 
 ------------------------------------------------------------------------
@@ -156,6 +164,19 @@ local function time_age_text(article)
     if rt ~= "" then parts[#parts + 1] = rt end
     local age = format_age(article.created_at)
     if age ~= "" then parts[#parts + 1] = age end
+    return table.concat(parts, " · ")
+end
+
+--- Single-line metadata: "<domain> · <reading time> · <age>".
+-- Used by the compact card layout to keep the body to two rows
+-- (title + meta) instead of three.
+local function meta_line_text(article)
+    local parts = {}
+    if article.domain and article.domain ~= "" then
+        parts[#parts + 1] = article.domain
+    end
+    local time_age = time_age_text(article)
+    if time_age ~= "" then parts[#parts + 1] = time_age end
     return table.concat(parts, " · ")
 end
 
@@ -241,26 +262,19 @@ function ArticleCard:init()
         truncate_with_ellipsis = true,
         fgcolor = fg_dim,
     }
-    local domain_widget = TextWidget:new{
-        text  = article.domain or "",
+    local meta_widget = TextWidget:new{
+        text  = meta_line_text(article),
         face  = meta_face,
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
         max_width = body_w,
-    }
-    local time_age_widget = TextWidget:new{
-        text  = time_age_text(article),
-        face  = meta_face,
-        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-        max_width = body_w,
+        truncate_with_ellipsis = true,
     }
 
     local body = VerticalGroup:new{
         align = "left",
         title_widget,
         VerticalSpan:new{ width = Size.padding.small },
-        domain_widget,
-        VerticalSpan:new{ width = Size.padding.tiny },
-        time_age_widget,
+        meta_widget,
     }
 
     -- Pad body vertically to centre it within the row.
@@ -272,18 +286,25 @@ function ArticleCard:init()
         body,
     }
 
-    -- Optional right column: percentage + status, right-aligned.
+    -- Optional right column: percentage + status, right-aligned. The
+    -- percentage carries the weight (cfont 22) so it reads as the
+    -- column's primary number; a small "read" / "done" / "skipped"
+    -- caption underneath supplies the unit.
     local right_box
     if right_col_visible then
         local right_children = {}
         if progress.percent and progress.percent > 0 then
             right_children[#right_children + 1] = TextWidget:new{
                 text = string.format("%d%%", math.floor(progress.percent * 100 + 0.5)),
-                face = Font:getFace("cfont", 18),
+                face = Font:getFace("cfont", 22),
+                bold = true,
                 fgcolor = fg_dim,
             }
         end
         local label = status_label(progress)
+        if label == "" and progress.percent and progress.percent > 0 then
+            label = _("read")
+        end
         if label ~= "" then
             if #right_children > 0 then
                 right_children[#right_children + 1] = VerticalSpan:new{ width = Size.padding.tiny }

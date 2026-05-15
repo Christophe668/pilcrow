@@ -26,14 +26,44 @@ local T = require("ffi/util").template
 
 local STYLE_TWEAK_FILE = "wallabag-code.css"
 
+local BackendClient = require("backendclient")
 local Cache = require("articlecache")
 local QueueView = require("queueview")
 local SettingsView = require("settingsview")
-local WallabagClient = require("wallabagclient")
+
+------------------------------------------------------------------------
+-- Menu-order injection
+--
+-- KOReader's menu builder reads a static order array from
+-- ui/elements/{reader,filemanager}_menu_order.lua. Plugins that don't
+-- appear in that array get appended as orphans at the bottom of the
+-- section their `sorting_hint` points to. To put Pilcrow at the *top*
+-- of the Tools tab — where the user expects to find it as the primary
+-- read-it-later entry — we prepend "pilcrow" to the section the first
+-- time this module is loaded. The order table is cached by `require`,
+-- so a single mutation is visible to both FileManager and ReaderUI.
+------------------------------------------------------------------------
+
+local function prepend_to_order(order_module_name, section)
+    local ok, order = pcall(require, order_module_name)
+    if not ok or type(order) ~= "table" then return end
+    local list = order[section]
+    if type(list) ~= "table" then return end
+    for _, id in ipairs(list) do
+        if id == "pilcrow" then return end  -- idempotent
+    end
+    table.insert(list, 1, "pilcrow")
+end
+
+prepend_to_order("ui/elements/reader_menu_order",      "tools")
+prepend_to_order("ui/elements/filemanager_menu_order", "tools")
+
+local PILCROW_VERSION = "0.1.0"
 
 local Pilcrow = WidgetContainer:extend{
     name = "pilcrow",
     is_doc_only = false,
+    version = PILCROW_VERSION,
 }
 
 ------------------------------------------------------------------------
@@ -41,9 +71,16 @@ local Pilcrow = WidgetContainer:extend{
 ------------------------------------------------------------------------
 
 function Pilcrow:init()
-    self.cache    = Cache.open()
-    self.client   = WallabagClient.new()
     self.settings = SettingsView.open()
+    self.backend_kind = self.settings:get("backend") or "wallabag"
+    self.cache    = Cache.open(self.backend_kind)
+    self.client   = BackendClient.new(self.settings)
+    -- Plugin loader sets `self.path` to the `.koplugin` directory.
+    -- Surface it on the class so the settings module (which doesn't
+    -- have an instance) can read it for self-update.
+    if self.path and self.path ~= "" then
+        Pilcrow._plugin_dir = self.path
+    end
 
     self:_ensureDownloadDir()
     self:_ensureStyleTweakInstalled()
@@ -52,15 +89,36 @@ function Pilcrow:init()
         self.ui.menu:registerToMainMenu(self)
     end
 
+    -- When the reader is opening a Pilcrow-fetched article, hijack the
+    -- top-of-screen tap so the user lands on a focused Pilcrow action
+    -- sheet (mark read, star, refetch, back to queue, …) instead of
+    -- KOReader's generic reader menu. The original menu remains one
+    -- tap away from the sheet.
+    self:_maybeInstallTopTapOverride()
+
+    local ctx = (self.ui and self.ui.document) and "ReaderUI" or "FileManager"
+    logger.dbg("pilcrow: init in", ctx,
+        "open_on_startup=", self.settings:get("open_on_startup"),
+        "launched_once=", Pilcrow._launched_once and true or false,
+        "return_flag=", Pilcrow._show_queue_after_close and true or false)
+
     -- Returning from the reader after an article ended? Reopen the queue.
     -- This flag is set by `_returnToQueueAfterClose` before the reader is
     -- closed; the file-manager-side plugin instance picks it up here.
     if Pilcrow._show_queue_after_close then
         Pilcrow._show_queue_after_close = false
         UIManager:nextTick(function() self:openQueue() end)
-    -- Open on startup if configured (only the first FileManager bring-up).
-    elseif self.settings:get("open_on_startup") and not Pilcrow._launched_once then
+    -- Open on startup if configured. Fire from whichever init runs
+    -- first this session (FileManager or ReaderUI): when KOReader
+    -- resumes the last-read book it skips the FileManager pass
+    -- entirely, so a FileManager-only guard would silently ignore the
+    -- toggle for anyone with a book in progress. The class-level
+    -- `_launched_once` flag still keeps the second init from
+    -- double-firing within the same process.
+    elseif self.settings:get("open_on_startup")
+       and not Pilcrow._launched_once then
         Pilcrow._launched_once = true
+        logger.dbg("pilcrow: open-on-startup firing in", ctx)
         UIManager:nextTick(function() self:openQueue() end)
     end
 end
@@ -69,22 +127,38 @@ function Pilcrow:onDispatcherRegisterActions()
     Dispatcher:registerAction("pilcrow_open", {
         category = "none",
         event    = "PilcrowOpen",
-        title    = _("Open Wallabag queue"),
+        title    = _("Open Pilcrow queue"),
         general  = true,
     })
     Dispatcher:registerAction("pilcrow_sync", {
         category = "none",
         event    = "PilcrowSync",
-        title    = _("Sync Wallabag queue"),
+        title    = _("Sync Pilcrow queue"),
         general  = true,
     })
 end
 
 function Pilcrow:addToMainMenu(menu_items)
+    -- `sorting_hint` is consulted by MenuSorter when the entry's id
+    -- isn't listed in the menu order file. We hint "tools" so it
+    -- lands next to Wallabag and news_downloader in the reader's
+    -- Tools tab; in the FileManager menu, "tools" exists too and
+    -- works the same way. Without a hint, the entry shows up with
+    -- a "NEW:" prefix in an unpredictable tab.
     menu_items.pilcrow = {
-        text = _("Wallabag queue"),
-        sorting_hint = "main",
-        callback = function() self:openQueue() end,
+        text = _("Pilcrow"),
+        sorting_hint = "tools",
+        callback = function()
+            if self.ui and self.ui.document then
+                -- Called from inside the reader: close the article
+                -- first so the queue paints over a clean state and
+                -- the next "Back" sends the user home, not back
+                -- into the same article.
+                self:_returnToQueue()
+            else
+                self:openQueue()
+            end
+        end,
     }
 end
 
@@ -108,13 +182,22 @@ end
 
 local IMAGE_EXTENSIONS = { "jpg", "jpeg", "png", "gif", "bmp", "img" }
 
+local function sanitize_id(id)
+    -- Image / EPUB file names embed the article id. Wallabag uses
+    -- integers; Readeck uses ~10-char base62 strings. Strip anything
+    -- that wouldn't be safe in a filename so an exotic backend id
+    -- can't break path joins.
+    local s = tostring(id or "")
+    return (s:gsub("[^%w%-_]", "_"))
+end
+
 local function image_filename_for(id)
     -- KOReader's ImageWidget refuses paths whose extension isn't a known
-    -- image format. .jpg is the safe default — most Wallabag preview_picture
+    -- image format. .jpg is the safe default — most preview_picture
     -- responses are JPEG. If the body turns out to be WebP/AVIF, MµPDF
     -- returns nil from renderImageFile and falls back to a checkerboard
     -- (no crash).
-    return string.format("%d.jpg", id)
+    return sanitize_id(id) .. ".jpg"
 end
 
 function Pilcrow:_imagePathFor(id)
@@ -124,8 +207,9 @@ end
 function Pilcrow:_pruneImageFor(id)
     -- Remove any cached preview, regardless of historical extension.
     local dir = self.settings:imageDir()
+    local sid = sanitize_id(id)
     for _, ext in ipairs(IMAGE_EXTENSIONS) do
-        local p = string.format("%s/%d.%s", dir, id, ext)
+        local p = string.format("%s/%s.%s", dir, sid, ext)
         if lfs.attributes(p, "mode") == "file" then
             os.remove(p)
         end
@@ -218,7 +302,31 @@ end
 -- Queue view
 ------------------------------------------------------------------------
 
+--- Rebuild cache + client if the user flipped the backend in
+--- settings since the last open. Triggered on each `openQueue` so the
+--- switch doesn't require a KOReader restart.
+function Pilcrow:_reloadBackendIfChanged()
+    local kind = self.settings:get("backend") or "wallabag"
+    if kind == self.backend_kind then return end
+    self.backend_kind = kind
+    self.cache  = Cache.open(kind)
+    self.client = BackendClient.new(self.settings)
+    self:_ensureDownloadDir()
+    -- Tear down the existing queue widget — both the cached instance
+    -- and any on-screen copy — so the next openQueue() builds a fresh
+    -- one bound to the new cache.
+    if self._queue and self._queue.show_parent then
+        UIManager:close(self._queue)
+    end
+    self._queue = nil
+end
+
 function Pilcrow:openQueue()
+    self:_reloadBackendIfChanged()
+    -- The "in progress" status is computed from sidecar progress, which
+    -- almost certainly changed while the user was reading. Bust the
+    -- per-article memo so the next list / count call re-reads sidecars.
+    if self.cache.invalidateProgress then self.cache:invalidateProgress() end
     if self._queue and self._queue.show_parent then
         UIManager:show(self._queue)
         self:_maybeAutoSync()
@@ -227,12 +335,16 @@ function Pilcrow:openQueue()
     self._queue = QueueView:new{
         cache              = self.cache,
         settings           = self.settings,
+        backend_kind       = self.backend_kind,
+        supports_reload    = self.client.supports_reload and true or false,
+        has_progress_fn    = function(article) return self:_articleHasProgress(article) end,
         on_open_article    = function(article) self:openArticle(article) end,
         on_action          = function(action, article, refresh_cb)
             self:handleRowAction(action, article, refresh_cb)
         end,
         on_sync            = function(refresh_cb) self:syncNow(refresh_cb) end,
         on_open_settings   = function() self.settings:show() end,
+        on_open_koreader_menu = function() self:_openKoreaderMenu() end,
     }
     UIManager:show(self._queue)
     self:_maybeAutoSync()
@@ -256,6 +368,21 @@ function Pilcrow:_maybeAutoSync()
     end)
 end
 
+--- Open the host's main menu (FileManager's or ReaderUI's hamburger).
+-- The queue widget sits on top of whichever shell launched it; calling
+-- this surfaces a modal menu so the user can reach core KOReader
+-- features (Tools, Plugin management, Exit, …) without leaving Pilcrow.
+function Pilcrow:_openKoreaderMenu()
+    if self.ui and self.ui.menu and self.ui.menu.onShowMenu then
+        self.ui.menu:onShowMenu()
+    else
+        UIManager:show(InfoMessage:new{
+            text = _("KOReader menu is not available from this context."),
+            timeout = 2,
+        })
+    end
+end
+
 function Pilcrow:onPilcrowOpen()
     self:openQueue()
     return true
@@ -266,33 +393,91 @@ function Pilcrow:onPilcrowSync()
     return true
 end
 
+--- Intercept the reader's Back action when reading a Pilcrow article
+-- and send the user to the queue instead of triggering KOReader's
+-- generic "back to file browser / exit" flow. Returning `true` short-
+-- circuits `ReaderBack:onBack` and the back-to-exit prompt.
+-- For non-Pilcrow documents we return nothing, so the user's normal
+-- back behaviour (location stack, back-to-exit prompt, …) is intact.
+function Pilcrow:onBack()
+    if not self:_currentArticleId() then return end
+    self:_returnToQueue()
+    return true
+end
+
+--- Fired by SettingsView when the user picks a different backend.
+--- We rebuild cache+client and, if the queue is currently visible,
+--- close it and immediately reopen against the new backend so the
+--- swap is visible without the user re-navigating from the main menu.
+function Pilcrow:onPilcrowBackendChanged()
+    local was_visible = self._queue and self._queue.show_parent
+    self:_reloadBackendIfChanged()  -- nils out self._queue
+    if was_visible then
+        UIManager:nextTick(function() self:openQueue() end)
+    end
+    return true
+end
+
 ------------------------------------------------------------------------
 -- Sync
 ------------------------------------------------------------------------
 
+local BACKEND_TITLES = {
+    wallabag = _("Wallabag"),
+    readeck  = _("Readeck"),
+}
+
+function Pilcrow:_backendTitle()
+    return BACKEND_TITLES[self.backend_kind] or _("Wallabag")
+end
+
 function Pilcrow:syncNow(refresh_cb, opts)
     opts = opts or {}
+    local title = self:_backendTitle()
+    -- Pick up any credentials the user just edited in Settings without
+    -- needing a plugin reload. Cheap — re-reads a small .lua file.
+    if self.client.reload then self.client:reload() end
     local ok, missing = self.client:isConfigured()
     if not ok then
         if not opts.quiet then
+            local hint
+            if self.backend_kind == "readeck" then
+                hint = _("Open Pilcrow settings and tap \"Readeck server & token\".")
+            else
+                hint = _("Open the original Wallabag plugin's settings first.")
+            end
             UIManager:show(InfoMessage:new{
-                text = T(_("Wallabag is not configured (missing: %1).\nOpen the original Wallabag plugin's settings first."), missing),
+                text = T(_("%1 is not configured (missing: %2).\n%3"),
+                         title, missing, hint),
             })
         end
         return
     end
 
     local kickoff = function()
-        local info = InfoMessage:new{ text = _("Syncing Wallabag…") }
-        UIManager:show(info)
-        UIManager:forceRePaint()
+        -- Closure that owns the visible progress widget. Each call
+        -- replaces the prior message in-place so the user sees coarse
+        -- phase changes without rapid eink redraws.
+        local info
+        local function set_progress(text)
+            if info then UIManager:close(info) end
+            info = InfoMessage:new{ text = text }
+            UIManager:show(info)
+            UIManager:forceRePaint()
+        end
+        local function close_progress()
+            if info then UIManager:close(info) end
+            info = nil
+        end
+
+        set_progress(T(_("Syncing %1…"), title))
         self:_doSync(function(summary)
-            UIManager:close(info)
+            close_progress()
             if not opts.quiet then
                 UIManager:show(InfoMessage:new{ text = summary, timeout = 3 })
             end
             if refresh_cb then refresh_cb() end
-        end)
+        end, { set_progress = set_progress, title = title })
     end
 
     -- For an explicit sync we want to wait for connectivity; for an auto
@@ -302,12 +487,21 @@ function Pilcrow:syncNow(refresh_cb, opts)
     kickoff()
 end
 
-function Pilcrow:_doSync(done_cb)
+function Pilcrow:_doSync(done_cb, ctx)
+    ctx = ctx or {}
+    local set_progress = ctx.set_progress or function() end
+    local title = ctx.title or self:_backendTitle()
     local per_page = self.settings:get("articles_per_sync") or 30
+
+    set_progress(T(_("%1: fetching unread articles…"), title))
     local ok, items_or_err = self.client:listEntries({
         archive  = 0,
         perPage  = per_page,
         maxItems = per_page,
+        on_progress = function(page, count)
+            set_progress(T(_("%1: fetching unread… page %2 (%3 articles)"),
+                           title, page, count))
+        end,
     })
     if not ok then
         done_cb(T(_("Sync failed: %1"), tostring(items_or_err)))
@@ -321,8 +515,13 @@ function Pilcrow:_doSync(done_cb)
     end
 
     -- Also pull a page of starred articles so they appear in the Starred filter.
+    set_progress(T(_("%1: fetching starred articles…"), title))
     local s_ok, starred = self.client:listEntries({
         archive = 0, starred = 1, perPage = per_page, maxItems = per_page,
+        on_progress = function(page, count)
+            set_progress(T(_("%1: fetching starred… page %2 (%3 articles)"),
+                           title, page, count))
+        end,
     })
     if s_ok then
         for _, api_article in ipairs(starred) do
@@ -337,28 +536,50 @@ function Pilcrow:_doSync(done_cb)
     local images_dl, images_skipped = 0, 0
     if self.settings:get("download_images") then
         self:_ensureImageDir()
+
+        -- Count first so we can show "N of M" instead of just a running tally.
+        local to_download = {}
         for id in pairs(seen) do
             local article = self.cache:get(id)
             if article and article.preview_picture and article.preview_picture ~= "" then
                 local path = self:_imagePathFor(id)
-                if lfs.attributes(path, "mode") == "file" then
-                    -- already cached at the canonical .jpg path
+                if lfs.attributes(path, "mode") ~= "file" then
+                    to_download[#to_download + 1] = { id = id, path = path, article = article }
+                else
                     if article.image_path ~= path then
                         self.cache:setFlag(id, "image_path", path)
                     end
-                else
-                    -- Sweep any legacy paths (e.g. old `.img` files) before
-                    -- downloading the fresh canonical copy.
-                    self:_pruneImageFor(id)
-                    local ok = self.client:downloadUrl(article.preview_picture, path)
-                    if ok then
-                        self.cache:setFlag(id, "image_path", path)
-                        images_dl = images_dl + 1
-                    else
-                        self.cache:setFlag(id, "image_path", nil)
-                        images_skipped = images_skipped + 1
-                    end
                 end
+            end
+        end
+
+        local total_to_dl = #to_download
+        if total_to_dl > 0 then
+            set_progress(T(_("%1: downloading previews… 0 / %2"),
+                           title, total_to_dl))
+        end
+
+        local done = 0
+        for _, item in ipairs(to_download) do
+            local id, path, article = item.id, item.path, item.article
+            -- Sweep any legacy paths (e.g. old `.img` files) before
+            -- downloading the fresh canonical copy.
+            self:_pruneImageFor(id)
+            local dl_ok = self.client:downloadUrl(article.preview_picture, path)
+            if dl_ok then
+                self.cache:setFlag(id, "image_path", path)
+                images_dl = images_dl + 1
+            else
+                self.cache:setFlag(id, "image_path", nil)
+                images_skipped = images_skipped + 1
+            end
+            done = done + 1
+            -- Refresh the progress line every few items rather than
+            -- every one — keeps eink redraws coarse without leaving
+            -- the user staring at a stale number for too long.
+            if done == total_to_dl or done % 5 == 0 then
+                set_progress(T(_("%1: downloading previews… %2 / %3"),
+                               title, done, total_to_dl))
             end
         end
     end
@@ -388,6 +609,12 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
                 text = T(_("Copied URL: %1"), article.url), timeout = 2,
             })
         end
+        return
+    end
+
+    if action == "clear_progress" then
+        self:_clearArticleProgress(article)
+        if refresh_cb then refresh_cb() end
         return
     end
 
@@ -433,7 +660,13 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
             UIManager:show(InfoMessage:new{ text = _("Delete failed."), timeout = 2 })
         end
     elseif action == "refetch" then
-        local info = InfoMessage:new{ text = _("Asking Wallabag to re-fetch…") }
+        if not self.client.supports_reload then
+            UIManager:show(InfoMessage:new{
+                text = _("Refetch is not supported by this backend."), timeout = 2,
+            })
+            return
+        end
+        local info = InfoMessage:new{ text = _("Asking the server to re-fetch…") }
         UIManager:show(info)
         UIManager:forceRePaint()
         local ok, refreshed, http_code = self.client:reloadEntry(id)
@@ -472,7 +705,10 @@ local function safe_filename(id, title)
     local cleaned = (title or "untitled"):gsub("[%c/\\:%*%?\"<>|]", " ")
     cleaned = cleaned:gsub("%s+", " ")
     if #cleaned > 100 then cleaned = cleaned:sub(1, 100) end
-    return string.format("[wr-id_%d] %s.epub", id, cleaned)
+    -- Historical marker "[wr-id_<id>]" works for both Wallabag (numeric
+    -- id) and Readeck (alphanumeric id). `parse_id_from_path` matches
+    -- the same shape.
+    return string.format("[wr-id_%s] %s.epub", sanitize_id(id), cleaned)
 end
 
 function Pilcrow:openArticle(article)
@@ -528,8 +764,133 @@ end
 
 local function parse_id_from_path(path)
     if not path then return nil end
-    local id = path:match("%[wr%-id_(%d+)%]")
-    return id and tonumber(id) or nil
+    -- Accept any id token that survives `sanitize_id` (alphanumeric +
+    -- `-` / `_`). Returns the id as a string so callers can hand it
+    -- straight to the cache, which keys by `tostring(id)` regardless
+    -- of backend.
+    local id = path:match("%[wr%-id_([%w_%-]+)%]")
+    return id
+end
+
+------------------------------------------------------------------------
+-- Top-tap override
+--
+-- KOReader wires the top-of-screen tap directly to `ReaderMenu:onTapShowMenu`
+-- via gesture handlers — it's a method call, not an event broadcast,
+-- so we can't intercept it through the normal plugin event chain.
+-- Instead we patch the method on the per-document `ReaderMenu` instance
+-- when the open document is a Pilcrow article. The instance dies with
+-- the reader, so the override is self-cleaning.
+------------------------------------------------------------------------
+
+function Pilcrow:_currentArticleId()
+    if not self.ui or not self.ui.document then return nil end
+    return parse_id_from_path(self.ui.document.file
+        or self.ui.document.filename or "")
+end
+
+function Pilcrow:_maybeInstallTopTapOverride()
+    if not self.settings:get("pilcrow_top_menu") then return end
+    if not self.ui or not self.ui.menu or not self.ui.document then return end
+    local id = self:_currentArticleId()
+    if not id or not self.cache:get(id) then return end
+
+    local menu = self.ui.menu
+    -- Idempotent — re-init shouldn't double-wrap.
+    if menu._pilcrow_orig_onTapShowMenu then return end
+    menu._pilcrow_orig_onTapShowMenu = menu.onTapShowMenu
+
+    local pilcrow = self
+    menu.onTapShowMenu = function(self_menu, ges)
+        pilcrow:_showReaderActionSheet(self_menu, ges)
+        return true
+    end
+end
+
+--- Action sheet shown when the user taps the top of a Pilcrow article.
+-- Mirrors `_showEndOfArticleActions` but called mid-read, so it offers
+-- mark-as-read rather than assuming the end-of-book context, and keeps
+-- an explicit escape hatch to the standard KOReader menu.
+function Pilcrow:_showReaderActionSheet(reader_menu, ges)
+    local id = self:_currentArticleId()
+    local article = id and self.cache:get(id) or nil
+    if not article then
+        -- Document went away or cache lost it — fall back to native menu.
+        if reader_menu and reader_menu._pilcrow_orig_onTapShowMenu then
+            reader_menu._pilcrow_orig_onTapShowMenu(reader_menu, ges)
+        end
+        return
+    end
+
+    local dialog
+    local star_label    = article.is_starred  and _("★ Unstar") or _("☆ Star")
+    local archive_label = article.is_archived and _("◯ Mark as unread")
+                                              or _("✓ Mark as read")
+
+    local buttons = {
+        {{ text = _("← Back to queue"),
+           callback = function() UIManager:close(dialog); self:_returnToQueue() end }},
+        {{ text = archive_label,
+           callback = function()
+               UIManager:close(dialog)
+               self:handleRowAction("toggle_archive", article)
+           end }},
+        {{ text = star_label,
+           callback = function()
+               UIManager:close(dialog)
+               self:handleRowAction("toggle_star", article)
+           end }},
+        {{ text = _("Copy URL"),
+           callback = function()
+               UIManager:close(dialog)
+               self:handleRowAction("copy_url", article)
+           end }},
+    }
+
+    if self:_articleHasProgress(article) then
+        buttons[#buttons + 1] = {{
+            text = _("Clear reading progress"),
+            callback = function()
+                UIManager:close(dialog)
+                self:_clearArticleProgress(article)
+            end,
+        }}
+    end
+
+    if self.client.supports_reload then
+        buttons[#buttons + 1] = {{
+            text = _("↻ Refetch from server"),
+            callback = function()
+                UIManager:close(dialog)
+                self:_refetchArticle(article)
+            end,
+        }}
+    end
+
+    buttons[#buttons + 1] = {{
+        text = _("KOReader menu…"),
+        callback = function()
+            UIManager:close(dialog)
+            -- Pass through to the original handler. We deliberately
+            -- forward the gesture so KOReader picks the correct tab
+            -- (top-edge taps map to specific tabs per screen region).
+            if reader_menu and reader_menu._pilcrow_orig_onTapShowMenu then
+                reader_menu._pilcrow_orig_onTapShowMenu(reader_menu, ges)
+            end
+        end,
+    }}
+    buttons[#buttons + 1] = {{
+        text = _("Stay on article"),
+        callback = function() UIManager:close(dialog) end,
+    }}
+
+    dialog = ButtonDialog:new{
+        title = article.title and article.title ~= "" and article.title
+                or _("Pilcrow article"),
+        title_align = "center",
+        buttons = buttons,
+    }
+    UIManager:show(dialog)
 end
 
 function Pilcrow:onEndOfBook()
@@ -604,13 +965,15 @@ function Pilcrow:_showEndOfArticleActions(article)
         end,
     }}
 
-    buttons[#buttons + 1] = {{
-        text = _("↻ Refetch from server"),
-        callback = function()
-            UIManager:close(dialog)
-            self:_refetchArticle(article)
-        end,
-    }}
+    if self.client.supports_reload then
+        buttons[#buttons + 1] = {{
+            text = _("↻ Refetch from server"),
+            callback = function()
+                UIManager:close(dialog)
+                self:_refetchArticle(article)
+            end,
+        }}
+    end
 
     buttons[#buttons + 1] = {{
         text = _("Copy URL"),
@@ -673,6 +1036,62 @@ function Pilcrow:_markFinished(article)
     end
 end
 
+--- True when KOReader has a sidecar (i.e. the article has been opened
+-- at least once). Used by the row menu / reader sheet to gate the
+-- "Clear progress" action — nothing to clear otherwise.
+function Pilcrow:_articleHasProgress(article)
+    if not article then return false end
+    if article.finished then return true end
+    local path = article.local_path
+    if not path or path == "" then return false end
+    if lfs.attributes(path, "mode") ~= "file" then return false end
+    return DocSettings:hasSidecarFile(path)
+end
+
+--- Reset reading progress for a Pilcrow article — sidecar percent
+-- and status — without touching annotations or bookmarks. The cache's
+-- `finished` flag is cleared too, so a "marked read locally" article
+-- is restored to "unread" client-side. The server's archive state is
+-- left alone (delete sets that; this is a softer client-only reset).
+function Pilcrow:_clearArticleProgress(article)
+    if not article then return end
+    local path = article.local_path
+    local touched_sidecar = false
+    if path and path ~= ""
+       and lfs.attributes(path, "mode") == "file"
+       and DocSettings:hasSidecarFile(path) then
+        local doc_settings = DocSettings:open(path)
+        if doc_settings then
+            doc_settings:saveSetting("percent_finished", 0)
+            local summary = doc_settings:readSetting("summary") or {}
+            -- "reading" + 0% is KOReader's "fresh book" pair.
+            summary.status = "reading"
+            doc_settings:saveSetting("summary", summary)
+            -- Clear last_xpointer too so the reader opens at the start
+            -- next time, not the page the user left off on.
+            doc_settings:saveSetting("last_xpointer", nil)
+            doc_settings:flush()
+            touched_sidecar = true
+        end
+    end
+
+    if article.finished then
+        self.cache:setFlag(article.id, "finished", false)
+        self.cache:save()
+    end
+    -- In-progress memo is keyed on the same sidecar state we just
+    -- mutated; bust it so the next list refresh recomputes.
+    if self.cache.invalidateProgress then
+        self.cache:invalidateProgress(article.id)
+    end
+
+    UIManager:show(InfoMessage:new{
+        text = touched_sidecar and _("Reading progress cleared.")
+                                or _("Nothing to clear."),
+        timeout = 2,
+    })
+end
+
 --- Ask Wallabag to re-fetch the article's contents from its source.
 --  Best-effort: if the network or server refuses, we surface an
 --  InfoMessage and stay where we are. On success we refresh the
@@ -680,6 +1099,12 @@ end
 --  to the queue — the next tap on the article re-downloads with the
 --  fresh content.
 function Pilcrow:_refetchArticle(article)
+    if not self.client.supports_reload then
+        UIManager:show(InfoMessage:new{
+            text = _("Refetch is not supported by this backend."), timeout = 2,
+        })
+        return
+    end
     if not NetworkMgr:isOnline() then
         UIManager:show(InfoMessage:new{
             text = _("Refetching needs a network connection."), timeout = 2,
@@ -687,7 +1112,7 @@ function Pilcrow:_refetchArticle(article)
         return
     end
 
-    local info = InfoMessage:new{ text = _("Asking Wallabag to re-fetch…") }
+    local info = InfoMessage:new{ text = _("Asking the server to re-fetch…") }
     UIManager:show(info)
     UIManager:forceRePaint()
 
@@ -741,10 +1166,17 @@ end
 -- out via the `return_to_queue_on_finish` setting.
 function Pilcrow:_returnToQueueAfterClose()
     if not self.settings:get("return_to_queue_on_finish") then return end
+    self:_returnToQueue()
+end
+
+--- Unconditional version of `_returnToQueueAfterClose`. Called from
+-- explicit user actions (the "Pilcrow" hamburger entry inside the
+-- reader, the "← Back to queue" button) where we ignore the
+-- `return_to_queue_on_finish` opt-out — the user just told us they
+-- want to go back, so we go back.
+function Pilcrow:_returnToQueue()
     if not self.ui or not self.ui.onHome then return end
     Pilcrow._show_queue_after_close = true
-    -- Defer one tick so any visible InfoMessage / ConfirmBox finishes
-    -- closing before the reader teardown begins.
     UIManager:nextTick(function()
         if self.ui and self.ui.onHome then self.ui:onHome() end
     end)

@@ -45,26 +45,55 @@ local SORT_LABELS = {
 }
 
 local STATUS_LABELS = {
-    unread   = _("Unread"),
-    starred  = _("Starred"),
-    archived = _("Archived"),
-    all      = _("All"),
+    unread      = _("Unread"),
+    in_progress = _("In progress"),
+    starred     = _("Starred"),
+    archived    = _("Archived"),
+    all         = _("All"),
+}
+
+local STATUS_ORDER = { "unread", "in_progress", "starred", "archived", "all" }
+
+local APP_TITLE = _("Pilcrow")
+-- Backend-specific labels are kept for actions that name a remote
+-- service ("Delete from Readeck", "Refetch from Wallabag") — the
+-- queue's own chrome carries the plugin brand instead.
+local BACKEND_TITLES = {
+    wallabag = _("Wallabag"),
+    readeck  = _("Readeck"),
 }
 
 local QueueView = Menu:extend{
     is_borderless        = true,
     covers_fullscreen    = true,
-    title                = _("Wallabag"),
+    title                = APP_TITLE,
     title_bar_left_icon  = "appbar.menu",
     title_bar_fm_style   = true,
-    items_per_page       = 4,
+    -- Setting `subtitle = false` (not nil) blocks Menu.lua's
+    -- auto-promotion of the subtitle slot to "" when fm_style is on.
+    -- Otherwise an invisible-but-present empty subtitle widget eats a
+    -- text-line of vertical space below "Pilcrow", pushing the status
+    -- bar far away from the title.
+    subtitle             = false,
+    -- 7 fits the new compact (THUMB_H = 64) card on a Libra 2 with a
+    -- chip row + status bar visible. _recalculateDimen re-floors the
+    -- row height anyway, so this is just a "max rows per page" hint.
+    items_per_page       = 7,
     -- Injected by main.lua:
     cache                = nil,
     settings             = nil,
+    backend_kind         = "wallabag",
+    supports_reload      = true,
+    -- Optional `function(article) -> bool`. Lets the queue ask the
+    -- host (main.lua) whether an article has reading progress, so it
+    -- can hide the "Clear reading progress" row when there's nothing
+    -- to clear. The queue itself doesn't touch DocSettings.
+    has_progress_fn      = nil,
     on_open_article      = nil,
     on_action            = nil,
     on_sync              = nil,
     on_open_settings     = nil,
+    on_open_koreader_menu = nil,
 }
 
 ------------------------------------------------------------------------
@@ -76,6 +105,7 @@ function QueueView:init()
     self.height = self.height or Screen:getHeight()
     self:_loadFilterState()
 
+    self.title = APP_TITLE
     self.title_bar_left_icon = "appbar.menu"
     self.onLeftButtonTap     = function() self:showActionsMenu() end
     -- TitleBar's subtitle slot stays empty; counts + last-sync render
@@ -257,6 +287,18 @@ function QueueView:_anyFilterActive()
         or fs.sort ~= DEFAULT_SORT
 end
 
+--- Singular word for the visible count, picked from the active filter.
+--- Keeps the status bar legible at 540px width — the old breakdown
+--- ("Total: 237 · unread: 237 · starred: 0") wrapped on narrow screens
+--- and duplicated information the chip row already shows.
+local STATUS_WORDS = {
+    unread      = function(n) return T(_("%1 unread"), n) end,
+    in_progress = function(n) return T(_("%1 in progress"), n) end,
+    starred     = function(n) return T(_("%1 starred"), n) end,
+    archived    = function(n) return T(_("%1 archived"), n) end,
+    all         = function(n) return T(_("%1 articles"), n) end,
+}
+
 function QueueView:_buildSubtitle()
     if not self.cache then return "" end
     local last = self.cache:lastSynced()
@@ -274,14 +316,18 @@ function QueueView:_buildSubtitle()
         end
     end
 
-    if self:_anyFilterActive() then
-        return T(_("%1 results · %2"), self.last_result_count or 0, sync_text)
+    local count = self.last_result_count or 0
+    local fs = self.filter_state
+    local has_secondary_filter = (fs.tags and #fs.tags > 0)
+        or (fs.search and fs.search ~= "")
+    local count_text
+    if has_secondary_filter then
+        count_text = T(_("%1 results"), count)
+    else
+        local fmt = STATUS_WORDS[fs.status] or STATUS_WORDS.all
+        count_text = fmt(count)
     end
-    local total   = self.cache:count("all")
-    local unread  = self.cache:count("unread")
-    local starred = self.cache:count("starred")
-    return T(_("Total: %1 · unread: %2 · starred: %3 · %4"),
-        total, unread, starred, sync_text)
+    return count_text .. " · " .. sync_text
 end
 
 ------------------------------------------------------------------------
@@ -289,8 +335,11 @@ end
 ------------------------------------------------------------------------
 
 function QueueView:reload()
-    -- Pass empty subtitle to TitleBar; StatusBar carries the live text.
-    self:switchItemTable(_("Wallabag"), self:_buildItemTable(), 1, nil, "")
+    -- StatusBar carries the live count/sync text — we never touch the
+    -- TitleBar's subtitle slot. Passing nil as the 5th arg leaves it
+    -- alone (passing "" would re-create the empty subtitle widget and
+    -- bring the spacing problem back).
+    self:switchItemTable(APP_TITLE, self:_buildItemTable(), 1, nil, nil)
     self:_rebuildChrome()
     UIManager:setDirty(self, "ui")
 end
@@ -344,43 +393,72 @@ end
 QueueView._rebuildStatusBar = QueueView._rebuildChrome
 QueueView._rebuildChipRow   = QueueView._rebuildChrome
 
+-- Threshold above which individual ✕-tag chips are suppressed in
+-- favour of the summary picker chip alone. With many tags selected
+-- the per-tag chips push everything else off-screen and the picker
+-- dialog is the better place to manage them anyway.
+local TAG_CHIP_COLLAPSE_THRESHOLD = 3
+
 function QueueView:_chipsForState()
     local fs = self.filter_state
     local chips = {}
 
-    -- Status chip is always present (so the user can switch from defaults)
+    -- Picker chips first — always present, grouped together at the
+    -- start of the row. Outline style with a ▾ caret signals
+    -- "tap to choose". Removable chips (✕) come after.
     chips[#chips + 1] = {
-        text = STATUS_LABELS[fs.status] or fs.status,
-        solid = true,
+        text = (STATUS_LABELS[fs.status] or fs.status) .. "  ▾",
         callback = function() self:showStatusDialog() end,
     }
 
-    -- Tag chips
-    for _, tag in ipairs(fs.tags) do
-        local captured = tag
-        chips[#chips + 1] = {
-            text = "#" .. tag .. "  ✕",
-            callback = function() self:removeTag(captured); self:reload() end,
-        }
+    local tag_count = (fs.tags and #fs.tags) or 0
+    local tag_chip_text
+    if tag_count == 0 then
+        tag_chip_text = _("Tags") .. "  ▾"
+    else
+        tag_chip_text = T(_("Tags: %1"), tag_count) .. "  ▾"
+    end
+    chips[#chips + 1] = {
+        text = tag_chip_text,
+        callback = function() self:showTagsDialog() end,
+    }
+
+    -- Sort picker (always shown — handled below right after Tags so
+    -- all three pickers cluster together regardless of how many
+    -- removable filters are active).
+    local at_default_sort = fs.sort == DEFAULT_SORT
+    local sort_text = SORT_LABELS[fs.sort] or fs.sort
+    chips[#chips + 1] = {
+        text = sort_text .. (at_default_sort and "  ▾" or "  ✕"),
+        callback = function()
+            if at_default_sort then
+                self:showSortDialog()
+            else
+                self.filter_state.sort = DEFAULT_SORT
+                self:_persistFilterState()
+                self:reload()
+            end
+        end,
+        hold_callback = function() self:showSortDialog() end,
+    }
+
+    -- Individual tag chips — tap to remove. Suppressed above the
+    -- threshold; the summary chip + dialog handle bulk management.
+    if tag_count > 0 and tag_count <= TAG_CHIP_COLLAPSE_THRESHOLD then
+        for _, tag in ipairs(fs.tags) do
+            local captured = tag
+            chips[#chips + 1] = {
+                text = "#" .. tag .. "  ✕",
+                callback = function() self:removeTag(captured); self:reload() end,
+            }
+        end
     end
 
-    -- Search chip
+    -- Search chip — removable, comes last.
     if fs.search and fs.search ~= "" then
         chips[#chips + 1] = {
             text = "⌕ \"" .. fs.search .. "\"  ✕",
             callback = function() self.filter_state.search = ""; self:reload() end,
-        }
-    end
-
-    -- Sort chip — only when not at default
-    if fs.sort ~= DEFAULT_SORT then
-        chips[#chips + 1] = {
-            text = (SORT_LABELS[fs.sort] or fs.sort) .. "  ✕",
-            callback = function()
-                self.filter_state.sort = DEFAULT_SORT
-                self:_persistFilterState()
-                self:reload()
-            end,
         }
     end
 
@@ -422,31 +500,44 @@ function QueueView:showRowMenu(article)
     local read_label = article.is_archived and _("Mark as unread") or _("Mark as read")
     local star_label = article.is_starred  and _("Unstar")          or _("Star")
 
+    local backend_title = BACKEND_TITLES[self.backend_kind] or _("Wallabag")
+    local rows = {
+        {{ text = read_label, callback = function() fire("toggle_archive") end }},
+        {{ text = star_label, callback = function() fire("toggle_star")    end }},
+        {{ text = _("Delete"), callback = function()
+            UIManager:close(dialog)
+            UIManager:show(ConfirmBox:new{
+                text = T(_("Delete \"%1\" from %2?"), article.title or "", backend_title),
+                ok_text = _("Delete"),
+                ok_callback = function()
+                    if self.on_action then
+                        self.on_action("delete", article, function() self:reload() end)
+                    end
+                end,
+            })
+        end }},
+        {{ text = _("Copy URL to clipboard"),
+           callback = function() fire("copy_url") end }},
+    }
+    if self.has_progress_fn and self.has_progress_fn(article) then
+        rows[#rows + 1] = {{
+            text = _("Clear reading progress"),
+            callback = function() fire("clear_progress") end,
+        }}
+    end
+    if self.supports_reload then
+        rows[#rows + 1] = {{
+            text = T(_("↻ Refetch from %1"), backend_title),
+            callback = function() fire("refetch") end,
+        }}
+    end
+    rows[#rows + 1] = {{ text = _("Cancel"),
+                         callback = function() UIManager:close(dialog) end }}
+
     dialog = ButtonDialog:new{
         title = article.title or _("(untitled)"),
         title_align = "center",
-        buttons = {
-            {{ text = read_label, callback = function() fire("toggle_archive") end }},
-            {{ text = star_label, callback = function() fire("toggle_star")    end }},
-            {{ text = _("Delete"), callback = function()
-                UIManager:close(dialog)
-                UIManager:show(ConfirmBox:new{
-                    text = T(_("Delete \"%1\" from Wallabag?"), article.title or ""),
-                    ok_text = _("Delete"),
-                    ok_callback = function()
-                        if self.on_action then
-                            self.on_action("delete", article, function() self:reload() end)
-                        end
-                    end,
-                })
-            end }},
-            {{ text = _("Copy URL to clipboard"),
-               callback = function() fire("copy_url") end }},
-            {{ text = _("↻ Refetch from Wallabag"),
-               callback = function() fire("refetch") end }},
-            {{ text = _("Cancel"),
-               callback = function() UIManager:close(dialog) end }},
-        },
+        buttons = rows,
     }
     UIManager:show(dialog)
 end
@@ -469,7 +560,7 @@ function QueueView:showActionsMenu()
     local sort_label = T(_("Sort: %1 →"), SORT_LABELS[fs.sort] or fs.sort)
 
     dialog = ButtonDialog:new{
-        title = _("Wallabag"),
+        title = APP_TITLE,
         title_align = "center",
         buttons = {
             {{ text = _("Sync now"), callback = function()
@@ -498,6 +589,10 @@ function QueueView:showActionsMenu()
                 UIManager:close(dialog)
                 if self.on_open_settings then self.on_open_settings() end
             end }},
+            {{ text = _("KOReader menu…"), callback = function()
+                UIManager:close(dialog)
+                if self.on_open_koreader_menu then self.on_open_koreader_menu() end
+            end }},
             {{ text = _("Close"), callback = function() UIManager:close(dialog) end }},
         },
     }
@@ -514,7 +609,7 @@ function QueueView:clearAllFilters()
 end
 
 ------------------------------------------------------------------------
--- Status dialog (mini-dialog, 4 buttons)
+-- Status dialog (mini-dialog, 5 buttons)
 ------------------------------------------------------------------------
 
 function QueueView:showStatusDialog()
@@ -526,8 +621,10 @@ function QueueView:showStatusDialog()
         self:reload()
     end
     local rows = {}
-    for _, key in ipairs({ "unread", "starred", "archived", "all" }) do
+    for _, key in ipairs(STATUS_ORDER) do
         local label = STATUS_LABELS[key] or key
+        local count = self.cache and self.cache:count(key) or 0
+        label = string.format("%s (%d)", label, count)
         if key == self.filter_state.status then label = "▸ " .. label end
         rows[#rows + 1] = {{ text = label, callback = function() pick(key) end }}
     end
@@ -584,7 +681,29 @@ function QueueView:removeTag(tag)
 end
 
 function QueueView:showTagsDialog()
-    local tag_counts = self.cache:tagCounts(self.filter_state.status)
+    -- Always show the full tag catalogue. Scoping by the current
+    -- status hides tags that exist on (say) archived articles when
+    -- the user happens to be viewing the unread filter — that's
+    -- confusing, especially in a "0 results" state where the user
+    -- is most likely opening this picker precisely to relax their
+    -- filter. Counts still come from `tagCounts`, which we ask for
+    -- across "all" so the displayed numbers represent the cache,
+    -- not the current view.
+    local tag_counts = self.cache:tagCounts("all")
+
+    -- Make sure currently-selected tags are always in the dialog,
+    -- even if the cache has been pruned since they were applied
+    -- (e.g. their last article was deleted). Otherwise the user
+    -- can't deselect them from here.
+    local present = {}
+    for _, entry in ipairs(tag_counts) do present[entry.tag] = true end
+    for _, t in ipairs(self.filter_state.tags or {}) do
+        if not present[t] then
+            tag_counts[#tag_counts + 1] = { tag = t, count = 0 }
+            present[t] = true
+        end
+    end
+
     if #tag_counts == 0 then
         UIManager:show(require("ui/widget/infomessage"):new{
             text = _("No tags found in cached articles."), timeout = 2,

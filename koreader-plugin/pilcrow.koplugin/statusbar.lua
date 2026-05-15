@@ -36,23 +36,28 @@ local SyncButton = InputContainer:extend{
 }
 
 function SyncButton:init()
-    self.height = self.height or Screen:scaleBySize(36)
-    local box_size = self.height
+    -- Borderless glyph at body weight. Hit area is widened slightly
+    -- past the glyph for touch comfort (~28px square is plenty for an
+    -- inline icon next to text — Kobo's 44px minimum applies to
+    -- isolated buttons, not a target sitting in a tappable bar).
     local glyph = TextWidget:new{
         text = "↻",
         face = Font:getFace("smallinfofont", 22),
-        fgcolor = Blitbuffer.COLOR_BLACK,
+        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
     }
+    local glyph_w = glyph:getSize().w
+    local glyph_h = glyph:getSize().h
+    local hit_w = math.max(Screen:scaleBySize(28), glyph_w + Screen:scaleBySize(8))
+    local hit_h = math.max(Screen:scaleBySize(28), glyph_h + Screen:scaleBySize(4))
+    self.height = hit_h
     local frame = FrameContainer:new{
-        bordersize = Size.border.thin,
-        radius = Size.radius.button,
+        bordersize = 0,
         padding = 0,
         margin = 0,
         background = Blitbuffer.COLOR_WHITE,
-        dimen = Geom:new{ w = box_size, h = box_size },
-        -- Centre the glyph by padding equally on each side.
+        dimen = Geom:new{ w = hit_w, h = hit_h },
         HorizontalGroup:new{
-            HorizontalSpan:new{ width = math.max(0, math.floor((box_size - glyph:getSize().w) / 2)) },
+            HorizontalSpan:new{ width = math.max(0, math.floor((hit_w - glyph_w) / 2)) },
             glyph,
         },
     }
@@ -133,14 +138,12 @@ function StatusBar:init()
         HorizontalSpan:new{ width = h_pad },
     }
 
-    -- Hairline below the bar matches the chip-row / header style.
+    -- No hairline below the bar — the chip row sits directly underneath
+    -- and Menu's title bar already draws its own separator below that,
+    -- so a second line here makes the header look fragmented.
     self[1] = VerticalGroup:new{
         align = "left",
         row,
-        LineWidget:new{
-            dimen = Geom:new{ w = self.width, h = 1 },
-            background = Blitbuffer.COLOR_LIGHT_GRAY,
-        },
     }
     self.dimen = self[1]:getSize()
 end

@@ -34,6 +34,7 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local Chip = InputContainer:extend{
     text = "",
     callback = nil,
+    hold_callback = nil,
     solid = false,    -- filled style (status chip)
 }
 
@@ -69,10 +70,26 @@ function Chip:init()
                 range = function() return self.dimen end,
             },
         },
+        Hold = {
+            GestureRange:new{
+                ges = "hold",
+                range = function() return self.dimen end,
+            },
+        },
     }
 end
 
 function Chip:onTap()
+    if self.callback then self.callback() end
+    return true
+end
+
+function Chip:onHold()
+    if self.hold_callback then
+        self.hold_callback()
+        return true
+    end
+    -- Fall back to tap so a long-press never feels dead.
     if self.callback then self.callback() end
     return true
 end
@@ -82,6 +99,10 @@ end
 ------------------------------------------------------------------------
 
 local ChipRow = VerticalGroup:extend{
+    -- VerticalGroup's default `align` is "center", which centred each
+    -- wrapped line under the parent's full width. We always want the
+    -- chip rows to hug the left edge instead.
+    align = "left",
     chips = nil,         -- array of { text=…, solid=…, callback=… }
     max_width = nil,     -- wrap point in pixels
     chip_gap = nil,
@@ -107,6 +128,7 @@ function ChipRow:init()
             text = c.text,
             solid = c.solid and true or false,
             callback = c.callback,
+            hold_callback = c.hold_callback,
         }
     end
 

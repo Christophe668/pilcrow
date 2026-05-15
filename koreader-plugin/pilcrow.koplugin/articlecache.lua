@@ -33,12 +33,21 @@ so a crash mid-session can't lose state.
 --]]
 
 local DataStorage = require("datastorage")
+local DocSettings = require("docsettings")
 local JSON = require("json")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 
 local CACHE_DIR_NAME = "pilcrow"
 local CACHE_FILE = "cache.json"
+-- Readeck has a separate on-disk cache so the two backends never mix
+-- entries (their ID spaces overlap on small numeric values, and the
+-- per-entry payload shape isn't strictly identical). Wallabag keeps
+-- the historical "cache.json" filename for backward compatibility.
+local CACHE_FILE_BY_KIND = {
+    wallabag = "cache.json",
+    readeck  = "readeck-cache.json",
+}
 local SCHEMA_VERSION = 1
 
 local Cache = {}
@@ -57,11 +66,16 @@ local function default_data()
     }
 end
 
-function Cache.open()
+--- Open (or create) the on-disk cache for a backend.
+--  @tparam[opt="wallabag"] string kind backend identifier
+function Cache.open(kind)
+    kind = kind or "wallabag"
+    local filename = CACHE_FILE_BY_KIND[kind] or CACHE_FILE
     local dir = DataStorage:getDataDir() .. "/" .. CACHE_DIR_NAME
     ensure_dir(dir)
-    local path = dir .. "/" .. CACHE_FILE
+    local path = dir .. "/" .. filename
     local self = setmetatable({
+        kind = kind,
         path = path,
         dir  = dir,
         data = default_data(),
@@ -123,11 +137,41 @@ function Cache:lastSynced()
     return self.data.last_synced or 0
 end
 
-local function pass_status(article, status)
+--- True when the article was opened in the reader, has reading
+--- progress, and isn't already done. Sidecar reads are cheap when
+--- the article has no `local_path` (early-return) — which is the
+--- case for everything that was never downloaded.
+--- Memoized per cache instance to avoid re-reading the sidecar on
+--- every filter/count call; invalidated by `setFlag`/`setLocalPath`
+--- when the article's state changes meaningfully.
+local function is_in_progress(article, mem)
+    if not article or article.is_archived or article.finished then return false end
+    local id  = article.id
+    if mem and mem[id] ~= nil then return mem[id] end
+    local path = article.local_path
+    local result = false
+    if path and path ~= ""
+       and lfs.attributes(path, "mode") == "file"
+       and DocSettings:hasSidecarFile(path) then
+        local doc_settings = DocSettings:open(path)
+        if doc_settings then
+            local summary = doc_settings:readSetting("summary") or {}
+            local percent = tonumber(doc_settings:readSetting("percent_finished")) or 0
+            if percent > 0 and percent < 1 and summary.status ~= "complete" then
+                result = true
+            end
+        end
+    end
+    if mem then mem[id] = result end
+    return result
+end
+
+local function pass_status(article, status, mem)
     if status == "all" or status == nil then return true end
-    if status == "unread"   then return not article.is_archived end
-    if status == "starred"  then return article.is_starred and true or false end
-    if status == "archived" then return article.is_archived and true or false end
+    if status == "unread"      then return not article.is_archived end
+    if status == "starred"     then return article.is_starred  and true or false end
+    if status == "archived"    then return article.is_archived and true or false end
+    if status == "in_progress" then return is_in_progress(article, mem) end
     return true
 end
 
@@ -187,9 +231,10 @@ function Cache:list(opts)
     local search = opts.search and opts.search:lower() or nil
     local sort   = opts.sort or "newest"
 
+    self._progress_mem = self._progress_mem or {}
     local out = {}
     for _, article in pairs(self.data.articles) do
-        if pass_status(article, status)
+        if pass_status(article, status, self._progress_mem)
            and pass_tags(article, opts.tags)
            and pass_search(article, search) then
             out[#out + 1] = article
@@ -202,11 +247,27 @@ end
 
 function Cache:count(status)
     -- Lightweight counter; doesn't filter by tags/search.
+    self._progress_mem = self._progress_mem or {}
     local n = 0
     for _, article in pairs(self.data.articles) do
-        if pass_status(article, status or "all") then n = n + 1 end
+        if pass_status(article, status or "all", self._progress_mem) then
+            n = n + 1
+        end
     end
     return n
+end
+
+--- Invalidate the in-progress memoization. Called when an article's
+--- state changes in a way that could affect the answer (open, mark
+--- finished, archive, delete). Without this the sidecar's freshness
+--- gets cached forever for a given session.
+function Cache:invalidateProgress(id)
+    if not self._progress_mem then return end
+    if id then
+        self._progress_mem[tostring(id)] = nil
+    else
+        self._progress_mem = {}
+    end
 end
 
 --- Return tags with counts, restricted to articles matching `status`.
@@ -232,7 +293,7 @@ function Cache:tagCounts(status)
 end
 
 Cache.SORT_KEYS = { "newest", "oldest", "longest", "shortest", "domain" }
-Cache.STATUS_KEYS = { "unread", "starred", "archived", "all" }
+Cache.STATUS_KEYS = { "unread", "in_progress", "starred", "archived", "all" }
 
 ------------------------------------------------------------------------
 -- Writes
@@ -294,16 +355,22 @@ function Cache:setLocalPath(id, path)
     local entry = self.data.articles[tostring(id)]
     if not entry then return end
     entry.local_path = path
+    self:invalidateProgress(id)
 end
 
 function Cache:setFlag(id, key, value)
     local entry = self.data.articles[tostring(id)]
     if not entry then return end
     entry[key] = value
+    -- Any of these can flip the in-progress verdict.
+    if key == "finished" or key == "is_archived" or key == "local_path" then
+        self:invalidateProgress(id)
+    end
 end
 
 function Cache:remove(id)
     self.data.articles[tostring(id)] = nil
+    self:invalidateProgress(id)
 end
 
 function Cache:markSynced()

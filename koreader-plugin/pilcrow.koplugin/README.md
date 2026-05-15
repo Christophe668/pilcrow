@@ -1,16 +1,27 @@
 # Pilcrow
 
-A KOReader plugin that turns your Wallabag unread queue into the primary reading
-experience on Kobo eink devices. Built as a UI layer on top of the existing
-`wallabag.koplugin`: it **shares the same credentials file**, so you configure
-your Wallabag server once and both plugins use it.
+A KOReader plugin that turns your read-it-later queue into the primary reading
+experience on Kobo eink devices.
+
+Pilcrow speaks **Wallabag** (default) and **Readeck**. You pick the backend
+in Settings → Backend; switching keeps the two caches and downloaded EPUBs
+side-by-side so flipping back and forth is harmless.
+
+- **Wallabag** — credentials are read from the original
+  `wallabag.koplugin`'s `wallabag.lua`, so you configure your server once
+  and both plugins use it.
+- **Readeck** — credentials live in `<settings_dir>/readeck.lua` and can be
+  edited from Pilcrow Settings → Readeck server & token. You need the
+  server URL and a bearer access token (generate one from your Readeck
+  profile → API tokens).
 
 > v1 — minimum-viable shape. See [Not yet](#not-yet) for what's intentionally
 > scoped out.
 
 ## What it does
 
-- Adds a **Wallabag queue** entry to the main menu.
+- Adds a **Wallabag queue** entry (titled **Readeck** when the Readeck
+  backend is selected) to the main menu.
 - Optional: opens automatically as the startup screen instead of the file
   manager (toggle in Settings).
 - Shows a fullscreen scrollable list of cached articles. Each row is a
@@ -64,7 +75,9 @@ plugins/pilcrow.koplugin/
 ├── settingsview.lua     -- plugin-local settings (download dir, prompts, etc.)
 ├── articlecache.lua     -- offline JSON store under <data_dir>/pilcrow/
                             (named to avoid collision with KOReader's frontend/cache.lua)
+├── backendclient.lua    -- factory: returns the right client for the configured backend
 ├── wallabagclient.lua   -- thin REST client; reads creds from wallabag.lua
+├── readeckclient.lua    -- thin REST client; reads creds from readeck.lua
 ├── README.md            -- this file
 └── CHANGELOG.md
 ```
@@ -74,11 +87,16 @@ plugins/pilcrow.koplugin/
 1. Copy (or symlink) `pilcrow.koplugin/` into your KOReader install's
    `plugins/` directory.
 2. Restart KOReader (or open the plugin manager and re-enable plugins).
-3. Open the original Wallabag plugin's settings and configure the server URL,
-   client id/secret, username, and password — Pilcrow reads them from
-   the same `<settings_dir>/wallabag.lua` file.
-4. Open **Wallabag queue** from the main menu and tap the hamburger → **Sync
-   now**.
+3. Configure credentials for the backend you want to use:
+   - **Wallabag (default):** open the original Wallabag plugin's settings
+     and configure server URL, client id/secret, username, and password.
+     Pilcrow reads them from the same `<settings_dir>/wallabag.lua` file.
+   - **Readeck:** open Pilcrow → hamburger → Settings, tap **Backend** and
+     pick Readeck, then tap **Readeck server & token…** to enter the
+     server URL (e.g. `https://readeck.example.com`) and a bearer access
+     token from your Readeck profile.
+4. Open **Wallabag queue** / **Readeck queue** from the main menu and tap
+   the hamburger → **Sync now**.
 
 ## Manual test plan
 
@@ -103,14 +121,17 @@ A 10-minute sanity pass before each release.
 
 ## Storage
 
-| What                                    | Where                                                     |
-| --------------------------------------- | --------------------------------------------------------- |
-| Article metadata cache                  | `<data_dir>/pilcrow/cache.json`                           |
-| Downloaded EPUBs                        | `<data_dir>/pilcrow/articles/` (overrideable in Settings) |
-| Preview thumbnails                      | `<data_dir>/pilcrow/images/<id>.jpg`                      |
-| Bundled CSS tweak (auto-installed)      | `<data_dir>/styletweaks/wallabag-code.css`                |
-| Plugin settings                         | `<settings_dir>/pilcrow.lua`                              |
-| **Shared credentials (read-only here)** | `<settings_dir>/wallabag.lua`                             |
+The Readeck backend uses parallel paths so the two backends never share
+filenames — flipping `Backend` doesn't trash existing downloads.
+
+| What                                    | Wallabag                                                          | Readeck                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Article metadata cache                  | `<data_dir>/pilcrow/cache.json`                                   | `<data_dir>/pilcrow/readeck-cache.json`                                    |
+| Downloaded EPUBs                        | `<data_dir>/pilcrow/articles/` (overrideable in Settings)         | `<data_dir>/pilcrow/readeck-articles/` (overrideable in Settings)          |
+| Preview thumbnails                      | `<data_dir>/pilcrow/images/<id>.jpg`                              | `<data_dir>/pilcrow/readeck-images/<id>.jpg`                               |
+| Bundled CSS tweak (auto-installed)      | `<data_dir>/styletweaks/wallabag-code.css`                        | same                                                                       |
+| Plugin settings                         | `<settings_dir>/pilcrow.lua`                                      | same                                                                       |
+| Credentials                             | `<settings_dir>/wallabag.lua` (shared with the upstream plugin)   | `<settings_dir>/readeck.lua` (Pilcrow-only)                                |
 
 ## Code-block styling
 
@@ -147,6 +168,19 @@ remove it from there too.
   refresh per change.
 - Touch targets: `items_per_page = 8`, which on a 1264×1680 Libra 2 display
   yields rows ~210px tall — well above the 88px Kobo minimum.
+
+## Backend differences
+
+A few capabilities are server-specific. Pilcrow hides the rows that don't
+apply.
+
+| Feature              | Wallabag | Readeck |
+| -------------------- | -------- | ------- |
+| Mark archived / star | ✅       | ✅      |
+| Delete on server     | ✅       | ✅      |
+| Add by URL           | ✅       | ✅      |
+| Refetch (re-extract) | ✅       | ❌ — Readeck's extractor only runs at create-time. The refetch button is hidden when the Readeck backend is selected. |
+| OAuth refresh        | ✅       | n/a — Readeck issues long-lived bearer tokens. If the server returns 401, you re-enter the token in Settings. |
 
 ## Not yet
 

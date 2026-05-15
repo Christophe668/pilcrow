@@ -245,6 +245,8 @@ function Client:listEntries(opts)
         local items = (data._embedded and data._embedded.items) or {}
         for _, item in ipairs(items) do results[#results + 1] = item end
 
+        if opts.on_progress then opts.on_progress(page, #results) end
+
         local pages = tonumber(data.pages) or 1
         if page >= pages or #items == 0 then break end
         page = page + 1

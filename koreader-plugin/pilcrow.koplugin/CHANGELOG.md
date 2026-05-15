@@ -9,6 +9,18 @@ than its own roadmap.
 
 ### Added
 
+- **Readeck backend** alongside Wallabag. Pick the backend in
+  Settings → Backend; Readeck reads credentials (server URL + bearer
+  access token) from `<settings_dir>/readeck.lua` and exposes the same
+  filter / sync / archive / star / delete UI as Wallabag. Readeck does
+  not support refetch — the row is hidden when that backend is selected.
+  Each backend keeps its own cache, downloads, and image directory so
+  switching is non-destructive (`readeck-cache.json`,
+  `readeck-articles/`, `readeck-images/`).
+- `backendclient.lua` factory module and `readeckclient.lua` REST client.
+
+### Added
+
 - `_meta.lua`, `main.lua`, `queueview.lua`, `articlerow.lua`,
   `settingsview.lua`, `cache.lua`, `wallabagclient.lua`.
 - Fullscreen Wallabag queue with filter (unread / starred / archived / all)

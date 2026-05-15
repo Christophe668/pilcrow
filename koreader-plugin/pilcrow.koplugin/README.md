@@ -124,14 +124,14 @@ A 10-minute sanity pass before each release.
 The Readeck backend uses parallel paths so the two backends never share
 filenames — flipping `Backend` doesn't trash existing downloads.
 
-| What                                    | Wallabag                                                          | Readeck                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Article metadata cache                  | `<data_dir>/pilcrow/cache.json`                                   | `<data_dir>/pilcrow/readeck-cache.json`                                    |
-| Downloaded EPUBs                        | `<data_dir>/pilcrow/articles/` (overrideable in Settings)         | `<data_dir>/pilcrow/readeck-articles/` (overrideable in Settings)          |
-| Preview thumbnails                      | `<data_dir>/pilcrow/images/<id>.jpg`                              | `<data_dir>/pilcrow/readeck-images/<id>.jpg`                               |
-| Bundled CSS tweak (auto-installed)      | `<data_dir>/styletweaks/wallabag-code.css`                        | same                                                                       |
-| Plugin settings                         | `<settings_dir>/pilcrow.lua`                                      | same                                                                       |
-| Credentials                             | `<settings_dir>/wallabag.lua` (shared with the upstream plugin)   | `<settings_dir>/readeck.lua` (Pilcrow-only)                                |
+| What                               | Wallabag                                                        | Readeck                                                           |
+| ---------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Article metadata cache             | `<data_dir>/pilcrow/cache.json`                                 | `<data_dir>/pilcrow/readeck-cache.json`                           |
+| Downloaded EPUBs                   | `<data_dir>/pilcrow/articles/` (overrideable in Settings)       | `<data_dir>/pilcrow/readeck-articles/` (overrideable in Settings) |
+| Preview thumbnails                 | `<data_dir>/pilcrow/images/<id>.jpg`                            | `<data_dir>/pilcrow/readeck-images/<id>.jpg`                      |
+| Bundled CSS tweak (auto-installed) | `<data_dir>/styletweaks/wallabag-code.css`                      | same                                                              |
+| Plugin settings                    | `<settings_dir>/pilcrow.lua`                                    | same                                                              |
+| Credentials                        | `<settings_dir>/wallabag.lua` (shared with the upstream plugin) | `<settings_dir>/readeck.lua` (Pilcrow-only)                       |
 
 ## Code-block styling
 
@@ -174,13 +174,13 @@ remove it from there too.
 A few capabilities are server-specific. Pilcrow hides the rows that don't
 apply.
 
-| Feature              | Wallabag | Readeck |
-| -------------------- | -------- | ------- |
-| Mark archived / star | ✅       | ✅      |
-| Delete on server     | ✅       | ✅      |
-| Add by URL           | ✅       | ✅      |
+| Feature              | Wallabag | Readeck                                                                                                               |
+| -------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| Mark archived / star | ✅       | ✅                                                                                                                    |
+| Delete on server     | ✅       | ✅                                                                                                                    |
+| Add by URL           | ✅       | ✅                                                                                                                    |
 | Refetch (re-extract) | ✅       | ❌ — Readeck's extractor only runs at create-time. The refetch button is hidden when the Readeck backend is selected. |
-| OAuth refresh        | ✅       | n/a — Readeck issues long-lived bearer tokens. If the server returns 401, you re-enter the token in Settings. |
+| OAuth refresh        | ✅       | n/a — Readeck issues long-lived bearer tokens. If the server returns 401, you re-enter the token in Settings.         |
 
 ## Not yet
 

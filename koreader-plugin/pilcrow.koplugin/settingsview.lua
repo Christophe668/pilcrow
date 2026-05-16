@@ -56,6 +56,17 @@ local DEFAULTS = {
     update_repo             = "Christophe668/pilcrow",
 }
 
+--- Stash the running plugin's directory + version on the module table
+--- so the self-update menu can read them. main.lua is loaded via
+--- `dofile` (not `require`) and the plugin root is dropped from
+--- package.path right after init, so `require("main")` from here
+--- silently returns nil. This module IS in package.loaded (it was
+--- loaded with `require`), so module-level fields survive.
+function Settings.setPluginInfo(dir, version)
+    Settings._plugin_dir     = dir
+    Settings._plugin_version = version
+end
+
 function Settings.open()
     local store = LuaSettings:open(DataStorage:getSettingsDir() .. "/" .. FILENAME)
     local data = store:readSetting(ROOT_KEY) or {}
@@ -348,8 +359,7 @@ function Settings:_showAboutSection()
         self:_showAboutSection()
     end
 
-    local Pilcrow = require("main")
-    local current_version = (Pilcrow and Pilcrow.version) or "?"
+    local current_version = Settings._plugin_version or "?"
     local repo = self:get("update_repo") or ""
 
     dialog = ButtonDialog:new{
@@ -379,8 +389,7 @@ end
 
 function Settings:_checkForUpdates()
     local SelfUpdate = require("selfupdate")
-    local Pilcrow = require("main")
-    local current = (Pilcrow and Pilcrow.version) or "0.0.0"
+    local current = Settings._plugin_version or "0.0.0"
     local repo = self:get("update_repo") or ""
     if repo == "" then
         UIManager:show(InfoMessage:new{
@@ -425,8 +434,7 @@ end
 
 function Settings:_applyUpdate(release)
     local SelfUpdate = require("selfupdate")
-    local Pilcrow = require("main")
-    local plugin_dir = Pilcrow and Pilcrow._plugin_dir
+    local plugin_dir = Settings._plugin_dir
     if not plugin_dir or plugin_dir == "" then
         UIManager:show(InfoMessage:new{
             text = _("Could not locate the plugin directory."), timeout = 3,

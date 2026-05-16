@@ -13,7 +13,15 @@ export const lightPalette = {
   "accent-ink": "#890000",
   "accent-soft": "#ffe5df",
   teal: "#2c8671",
+  warning: "#de9c31",
+  "warning-soft": "#fff0d4",
+  info: "#3786c3",
+  "info-soft": "#dff1ff",
   highlight: "#ffdd93",
+  "highlight-yellow": "#ffdd93",
+  "highlight-mint": "#b0efcc",
+  "highlight-rose": "#ffbfca",
+  "highlight-sky": "#a3e5ff",
 } as const;
 export const darkPalette = {
   bg: "#120c07",
@@ -28,6 +36,14 @@ export const darkPalette = {
   "accent-ink": "#ffa693",
   "accent-soft": "#49150f",
   teal: "#57b9a1",
+  warning: "#e8aa4e",
+  "warning-soft": "#472d00",
+  info: "#6cb2ec",
+  "info-soft": "#092b44",
   highlight: "#6e5000",
+  "highlight-yellow": "#6e5000",
+  "highlight-mint": "#255940",
+  "highlight-rose": "#6c343e",
+  "highlight-sky": "#1b546c",
 } as const;
 export type ThemeColor = keyof typeof lightPalette;

@@ -105,6 +105,15 @@ To install onto a USB-mounted Kobo:
 pnpm kobo:install
 ```
 
+### Cutting a koplugin release
+
+Tag the repo with `koplugin-v<calendar-version>` (e.g. `koplugin-v2026.05.0`).
+The [`koplugin.yml`](.github/workflows/koplugin.yml) workflow zips
+`pilcrow.koplugin/` and publishes the archive as a GitHub Release asset, so
+end users can install without cloning the repo. App and koplugin tags are
+disjoint (`v*` vs `koplugin-v*`) because the koplugin uses calendar
+versioning while the app uses semver.
+
 ## Security
 
 User-facing summary is in the [README](README.md#privacy--security).

@@ -113,8 +113,20 @@ plugins/pilcrow.koplugin/
 
 ## Install
 
+Two options:
+
+**From a release zip (no laptop required).** Grab the latest
+`pilcrow.koplugin-<version>.zip` from the project's
+[GitHub Releases](https://github.com/Christophe668/pilcrow/releases?q=koplugin) (look for tags starting with `koplugin-v`),
+copy it to the device, and unzip it so the result is
+`.adds/koreader/plugins/pilcrow.koplugin/` (Kobo) or the equivalent
+`plugins/` directory on your platform.
+
+**From source.**
+
 1. Copy (or symlink) `pilcrow.koplugin/` into your KOReader install's
-   `plugins/` directory.
+   `plugins/` directory. Repo contributors can run `pnpm kobo:install`
+   from the project root to rsync onto a USB-mounted Kobo.
 2. Restart KOReader (or open the plugin manager and re-enable plugins).
 3. Configure credentials for the backend you want to use:
    - **Wallabag (default):** open the original Wallabag plugin's settings

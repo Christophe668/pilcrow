@@ -35,6 +35,7 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local ImageWidget = require("ui/widget/imagewidget")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LineWidget = require("ui/widget/linewidget")
+local OverlapGroup = require("ui/widget/overlapgroup")
 local RightContainer = require("ui/widget/container/rightcontainer")
 local Screen = require("device").screen
 local Size = require("ui/size")
@@ -51,8 +52,10 @@ local _ = require("gettext")
 -- 7 rows per page.
 local THUMB_W = Screen:scaleBySize(96)
 local THUMB_H = Screen:scaleBySize(64)
--- Right column reserved for progress + status. Empty when no progress.
-local RIGHT_COL_W = Screen:scaleBySize(64)
+-- Slim progress bar painted along the bottom of the thumbnail when an
+-- article has reading progress. Sized so it's legible at a glance on
+-- eink without overpowering the preview.
+local PROGRESS_BAR_H = Screen:scaleBySize(5)
 
 local ArticleCard = InputContainer:extend{
     -- Required
@@ -81,9 +84,35 @@ local function image_file_readable(path)
     return lfs.attributes(path, "mode") == "file"
 end
 
-function ArticleCard:_buildThumbnail()
+--- Build a slim progress bar sized to the thumbnail width. The bar is
+--- two LineWidgets stacked in an OverlapGroup — a light-gray track and
+--- a black fill whose width is proportional to `percent` (0..1).
+--- Returns nil for zero/missing progress so callers can skip the
+--- overlay entirely.
+local function build_progress_bar(percent)
+    if not percent or percent <= 0 then return nil end
+    local pct = math.max(0, math.min(1, percent))
+    local fill_w = math.max(1, math.floor(THUMB_W * pct))
+    local track = LineWidget:new{
+        background = Blitbuffer.COLOR_LIGHT_GRAY,
+        dimen = Geom:new{ w = THUMB_W, h = PROGRESS_BAR_H },
+    }
+    local fill = LineWidget:new{
+        background = Blitbuffer.COLOR_BLACK,
+        dimen = Geom:new{ w = fill_w, h = PROGRESS_BAR_H },
+    }
+    return OverlapGroup:new{
+        dimen = Geom:new{ w = THUMB_W, h = PROGRESS_BAR_H },
+        allow_mirroring = false,
+        track,
+        fill,
+    }
+end
+
+function ArticleCard:_buildThumbnail(progress)
     local article = (self.entry and self.entry.article) or {}
 
+    local thumb_frame
     if image_file_readable(article.image_path) then
         local ok, widget = pcall(ImageWidget.new, ImageWidget, {
             file = article.image_path,
@@ -94,7 +123,7 @@ function ArticleCard:_buildThumbnail()
             file_do_cache = false,
         })
         if ok and widget then
-            return FrameContainer:new{
+            thumb_frame = FrameContainer:new{
                 bordersize = Size.border.thin,
                 padding = 0,
                 margin = 0,
@@ -110,22 +139,39 @@ function ArticleCard:_buildThumbnail()
         end
     end
 
-    -- Empty light-grey well for articles without (or with un-decodable)
-    -- preview. The previous design used a `📄` glyph, but Noto Sans —
-    -- KOReader's bundled UI font — doesn't carry that codepoint, so it
-    -- fell back to the "missing glyph" box (the "?" the user saw).
-    -- A bare filled rectangle reads as "no preview" without any glyph
-    -- that may or may not render.
-    return FrameContainer:new{
-        bordersize = Size.border.thin,
-        padding = 0,
-        margin = 0,
-        background = Blitbuffer.COLOR_LIGHT_GRAY,
-        dim = self.entry and self.entry.dim,
-        CenterContainer:new{
-            dimen = Geom:new{ w = THUMB_W, h = THUMB_H },
-            HorizontalSpan:new{ width = 0 },
-        },
+    if not thumb_frame then
+        -- Empty light-grey well for articles without (or with un-decodable)
+        -- preview. The previous design used a `📄` glyph, but Noto Sans —
+        -- KOReader's bundled UI font — doesn't carry that codepoint, so it
+        -- fell back to the "missing glyph" box (the "?" the user saw).
+        -- A bare filled rectangle reads as "no preview" without any glyph
+        -- that may or may not render.
+        thumb_frame = FrameContainer:new{
+            bordersize = Size.border.thin,
+            padding = 0,
+            margin = 0,
+            background = Blitbuffer.COLOR_LIGHT_GRAY,
+            dim = self.entry and self.entry.dim,
+            CenterContainer:new{
+                dimen = Geom:new{ w = THUMB_W, h = THUMB_H },
+                HorizontalSpan:new{ width = 0 },
+            },
+        }
+    end
+
+    local bar = progress and build_progress_bar(progress.percent)
+    if not bar then return thumb_frame end
+
+    -- Pin the bar to the bottom of the thumbnail frame. Measuring the
+    -- frame's full size keeps the bar aligned whether the thumb is the
+    -- image or the empty-preview well.
+    local frame_h = thumb_frame:getSize().h
+    bar.overlap_offset = { 0, frame_h - PROGRESS_BAR_H }
+    return OverlapGroup:new{
+        dimen = Geom:new{ w = thumb_frame:getSize().w, h = frame_h },
+        allow_mirroring = false,
+        thumb_frame,
+        bar,
     }
 end
 
@@ -228,22 +274,16 @@ function ArticleCard:init()
     local h_pad = Size.padding.default
     local gap   = Size.padding.large
 
-    local thumb = self:_buildThumbnail()
-
-    -- Decide if a right column gets shown; it costs body width when present.
+    -- Reading progress lives ON the thumbnail (slim bar along its
+    -- bottom edge) rather than as a separate column or inline text,
+    -- so read it before the thumbnail build can overlay the bar.
     local progress = read_progress(article)
-    local right_col_visible = progress ~= nil and
-        ((progress.percent and progress.percent > 0) or status_label(progress) ~= "")
-
-    local right_col_w = right_col_visible and RIGHT_COL_W or 0
-    local right_col_gap = right_col_visible and gap or 0
+    local thumb = self:_buildThumbnail(progress)
 
     local body_w = self.dimen.w
         - h_pad * 2
         - thumb:getSize().w
         - gap
-        - right_col_gap
-        - right_col_w
 
     local is_unread = (not article.is_archived) and (not article.finished)
     local title_face = is_unread and Font:getFace("cfont", 22)
@@ -262,8 +302,20 @@ function ArticleCard:init()
         truncate_with_ellipsis = true,
         fgcolor = fg_dim,
     }
+
+    -- Terminal states ("done" / "skipped") are rare and the progress
+    -- bar alone can't distinguish them — append them to the meta line
+    -- so they're still callable out at a glance.
+    local meta_text = meta_line_text(article)
+    local terminal_label = status_label(progress)
+    if terminal_label ~= "" then
+        meta_text = meta_text ~= ""
+            and (meta_text .. " · " .. terminal_label)
+            or  terminal_label
+    end
+
     local meta_widget = TextWidget:new{
-        text  = meta_line_text(article),
+        text  = meta_text,
         face  = meta_face,
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
         max_width = body_w,
@@ -286,48 +338,6 @@ function ArticleCard:init()
         body,
     }
 
-    -- Optional right column: percentage + status, right-aligned. The
-    -- percentage carries the weight (cfont 22) so it reads as the
-    -- column's primary number; a small "read" / "done" / "skipped"
-    -- caption underneath supplies the unit.
-    local right_box
-    if right_col_visible then
-        local right_children = {}
-        if progress.percent and progress.percent > 0 then
-            right_children[#right_children + 1] = TextWidget:new{
-                text = string.format("%d%%", math.floor(progress.percent * 100 + 0.5)),
-                face = Font:getFace("cfont", 22),
-                bold = true,
-                fgcolor = fg_dim,
-            }
-        end
-        local label = status_label(progress)
-        if label == "" and progress.percent and progress.percent > 0 then
-            label = _("read")
-        end
-        if label ~= "" then
-            if #right_children > 0 then
-                right_children[#right_children + 1] = VerticalSpan:new{ width = Size.padding.tiny }
-            end
-            right_children[#right_children + 1] = TextWidget:new{
-                text = label,
-                face = meta_face,
-                fgcolor = Blitbuffer.COLOR_DARK_GRAY,
-            }
-        end
-        local right_inner = VerticalGroup:new{
-            align = "right",
-            table.unpack(right_children),
-        }
-        local right_h = right_inner:getSize().h
-        local right_pad = math.max(0, math.floor((self.dimen.h - right_h) / 2))
-        right_box = VerticalGroup:new{
-            align = "right",
-            VerticalSpan:new{ width = right_pad },
-            right_inner,
-        }
-    end
-
     -- Centre thumbnail vertically against body.
     local thumb_h = thumb:getSize().h
     local thumb_pad = math.max(0, math.floor((self.dimen.h - thumb_h) / 2))
@@ -342,11 +352,8 @@ function ArticleCard:init()
         thumb_box,
         HorizontalSpan:new{ width = gap },
         body_box,
+        HorizontalSpan:new{ width = h_pad },
     }
-    if right_col_visible then
-        content_children[#content_children + 1] = HorizontalSpan:new{ width = gap }
-        content_children[#content_children + 1] = right_box
-    end
     content_children[#content_children + 1] = HorizontalSpan:new{ width = h_pad }
 
     local content = HorizontalGroup:new{

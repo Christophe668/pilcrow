@@ -76,10 +76,15 @@ function Pilcrow:init()
     self.cache    = Cache.open(self.backend_kind)
     self.client   = BackendClient.new(self.settings)
     -- Plugin loader sets `self.path` to the `.koplugin` directory.
-    -- Surface it on the class so the settings module (which doesn't
-    -- have an instance) can read it for self-update.
+    -- Stash it (plus our version) on the SettingsView module so the
+    -- self-update menu can read them. We can't rely on `require("main")`
+    -- from the settings panel: main.lua is loaded via `dofile` and the
+    -- plugin root is dropped from package.path right after, so the
+    -- require would silently return nil. SettingsView, by contrast, was
+    -- loaded with `require` and is in package.loaded, so its module-
+    -- level fields survive across event handlers.
     if self.path and self.path ~= "" then
-        Pilcrow._plugin_dir = self.path
+        SettingsView.setPluginInfo(self.path, PILCROW_VERSION)
     end
 
     self:_ensureDownloadDir()

@@ -1,0 +1,54 @@
+name: Build Android APK
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tokens
+
+      - name: Expo prebuild (android)
+        run: pnpm exec expo prebuild --platform android --no-install --clean
+
+      - name: Gradle assembleDebug
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Locate APK
+        id: apk
+        run: |
+          path=$(find android/app/build/outputs/apk -name '*.apk' | head -n1)
+          name="pilcrow-${GITHUB_REF_NAME//\//-}.apk"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.path }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.apk.outputs.path }}

@@ -60,10 +60,26 @@ prepend_to_order("ui/elements/filemanager_menu_order", "tools")
 
 local PILCROW_VERSION = "0.1.0"
 
+-- Absolute path to this `.koplugin` directory, computed at module load.
+-- KOReader's plugin loader normally sets `self.path` on the instance,
+-- but the Settings module reaches into the class via `require("main")`
+-- and can't depend on init() having run — and on some startup paths
+-- `self.path` is nil entirely, which breaks self-update with
+-- "Could not locate the plugin directory". debug.getinfo gives us the
+-- path of this file regardless of how the plugin was loaded.
+local function _resolve_plugin_dir()
+    local source = debug.getinfo(1, "S").source or ""
+    if source:sub(1, 1) == "@" then source = source:sub(2) end
+    return source:match("^(.*)/[^/]+$") or ""
+end
+
+local PLUGIN_DIR = _resolve_plugin_dir()
+
 local Pilcrow = WidgetContainer:extend{
     name = "pilcrow",
     is_doc_only = false,
     version = PILCROW_VERSION,
+    _plugin_dir = PLUGIN_DIR,
 }
 
 ------------------------------------------------------------------------
@@ -75,9 +91,8 @@ function Pilcrow:init()
     self.backend_kind = self.settings:get("backend") or "wallabag"
     self.cache    = Cache.open(self.backend_kind)
     self.client   = BackendClient.new(self.settings)
-    -- Plugin loader sets `self.path` to the `.koplugin` directory.
-    -- Surface it on the class so the settings module (which doesn't
-    -- have an instance) can read it for self-update.
+    -- _plugin_dir is set at module load via debug.getinfo, but if the
+    -- plugin loader provided self.path, prefer it (cheaper and equivalent).
     if self.path and self.path ~= "" then
         Pilcrow._plugin_dir = self.path
     end
@@ -248,8 +263,7 @@ function Pilcrow:_styleTweakDestPath()
 end
 
 function Pilcrow:_styleTweakSourcePath()
-    -- self.path is set by the plugin loader to the .koplugin directory.
-    return (self.path or ".") .. "/styles/" .. STYLE_TWEAK_FILE
+    return (self.path or Pilcrow._plugin_dir or ".") .. "/styles/" .. STYLE_TWEAK_FILE
 end
 
 --- Copy our bundled CSS into KOReader's user styletweaks directory.

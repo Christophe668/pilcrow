@@ -1,0 +1,62 @@
+name: Publish koplugin
+on:
+  push:
+    tags: ["koplugin-v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for the zip (e.g. 2026.05.0). Leave blank to use the short SHA."
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            v="${GITHUB_REF_NAME#koplugin-v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            v="${{ inputs.version }}"
+          else
+            v="$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "zip=pilcrow.koplugin-$v.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Build zip
+        run: |
+          cd koreader-plugin
+          zip -r "../${{ steps.ver.outputs.zip }}" pilcrow.koplugin \
+            -x '*/.DS_Store' '*/__pycache__/*'
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ver.outputs.zip }}
+          path: ${{ steps.ver.outputs.zip }}
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "KOReader plugin ${{ steps.ver.outputs.version }}"
+          body: |
+            KOReader plugin build for tag `${{ github.ref_name }}`.
+
+            **Install on a Kobo:**
+            1. Download `${{ steps.ver.outputs.zip }}` below.
+            2. Copy it to the device and unzip into `.adds/koreader/plugins/`
+               so the directory is at `.adds/koreader/plugins/pilcrow.koplugin/`.
+            3. Restart KOReader.
+
+            See the plugin [README](https://github.com/${{ github.repository }}/blob/main/koreader-plugin/pilcrow.koplugin/README.md)
+            and [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/koreader-plugin/pilcrow.koplugin/CHANGELOG.md).
+          files: ${{ steps.ver.outputs.zip }}
+          fail_on_unmatched_files: true

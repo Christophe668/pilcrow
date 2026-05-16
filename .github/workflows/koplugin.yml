@@ -30,6 +30,13 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "zip=pilcrow.koplugin-$v.zip" >> "$GITHUB_OUTPUT"
 
+      - name: Stamp PILCROW_VERSION
+        run: |
+          file="koreader-plugin/pilcrow.koplugin/main.lua"
+          v='${{ steps.ver.outputs.version }}'
+          sed -i -E "s/^local PILCROW_VERSION = \".*\"/local PILCROW_VERSION = \"$v\"/" "$file"
+          grep '^local PILCROW_VERSION' "$file"
+
       - name: Build zip
         run: |
           cd koreader-plugin

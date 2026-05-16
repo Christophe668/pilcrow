@@ -32,6 +32,9 @@ export function oklchToHex(l: number, c: number, h: number): string {
 
 type OklchTriple = readonly [number, number, number];
 
+// Surface / text / brand palette. Semantic intent (success/danger/etc.) is
+// layered on top of these in `tailwind.config.ts` so renaming brand colors
+// flows through automatically.
 const LIGHT: Record<string, OklchTriple> = {
   bg: [0.98, 0.006, 70],
   surface: [1, 0, 0],
@@ -45,7 +48,18 @@ const LIGHT: Record<string, OklchTriple> = {
   "accent-ink": [0.38, 0.18, 30],
   "accent-soft": [0.945, 0.035, 30],
   teal: [0.56, 0.09, 175],
+  // Status colors that don't map cleanly to brand tones.
+  warning: [0.74, 0.14, 75],
+  "warning-soft": [0.96, 0.04, 80],
+  info: [0.6, 0.12, 245],
+  "info-soft": [0.95, 0.03, 245],
+  // Annotation highlight palette. `highlight` is the legacy yellow; the
+  // named variants let readers pick a color per highlight.
   highlight: [0.91, 0.1, 85],
+  "highlight-yellow": [0.91, 0.1, 85],
+  "highlight-mint": [0.9, 0.08, 160],
+  "highlight-rose": [0.88, 0.09, 10],
+  "highlight-sky": [0.89, 0.08, 230],
 };
 
 const DARK: Record<string, OklchTriple> = {
@@ -61,7 +75,15 @@ const DARK: Record<string, OklchTriple> = {
   "accent-ink": [0.82, 0.12, 32],
   "accent-soft": [0.28, 0.08, 30],
   teal: [0.72, 0.1, 175],
+  warning: [0.78, 0.13, 75],
+  "warning-soft": [0.32, 0.07, 75],
+  info: [0.74, 0.11, 245],
+  "info-soft": [0.28, 0.06, 245],
   highlight: [0.45, 0.1, 85],
+  "highlight-yellow": [0.45, 0.1, 85],
+  "highlight-mint": [0.42, 0.07, 160],
+  "highlight-rose": [0.4, 0.08, 10],
+  "highlight-sky": [0.42, 0.07, 230],
 };
 
 function emit(palette: Record<string, OklchTriple>) {

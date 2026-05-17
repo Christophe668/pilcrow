@@ -1,7 +1,7 @@
 import "../global.css";
 import { useEffect, useState } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
-import { useColorScheme, View, Platform } from "react-native";
+import { useColorScheme, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/theme/provider";
@@ -19,8 +19,7 @@ function AuthGate() {
   const auth = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const platform = (Platform.OS === "web" ? "web" : Platform.OS) as "web" | "ios" | "android";
-  const decision = decideRoute(platform, auth.status, segments);
+  const decision = decideRoute(auth.status, segments);
 
   useEffect(() => {
     if (decision.kind === "redirect") {

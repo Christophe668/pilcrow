@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,6 +10,11 @@ import { useSyncNow } from "@/hooks/useSyncNow";
 import { BookmarkletCard } from "@/components/BookmarkletCard";
 import { getBackend } from "@/api/backend";
 import { useTokens } from "@/theme/provider";
+import {
+  getCachedRuntimeConfig,
+  loadRuntimeConfig,
+  type RuntimeConfig,
+} from "@/lib/runtime-config";
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "never";
@@ -31,6 +36,18 @@ export default function Settings() {
   const status = useSyncStatus();
   const sync = useSyncNow();
   const [signingOut, setSigningOut] = useState(false);
+  const [runtimeCfg, setRuntimeCfg] = useState<RuntimeConfig | null>(getCachedRuntimeConfig());
+
+  useEffect(() => {
+    if (runtimeCfg) return;
+    let cancelled = false;
+    loadRuntimeConfig().then((cfg) => {
+      if (!cancelled) setRuntimeCfg(cfg);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeCfg]);
 
   const onBack = () => {
     // Prefer the natural back-stack pop so we land on whichever
@@ -43,26 +60,73 @@ export default function Settings() {
     }
   };
 
+  const surfaceError = (intent: string, e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    const text = `${intent} failed: ${msg}`;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      // eslint-disable-next-line no-alert
+      window.alert(text);
+    } else {
+      Alert.alert(intent, msg);
+    }
+  };
+
   const onSignOut = async () => {
     setSigningOut(true);
     try {
       await signOut();
       router.replace("/(auth)/server");
+    } catch (e) {
+      surfaceError("Sign out", e);
     } finally {
       setSigningOut(false);
     }
   };
 
-  const host = auth.status === "authenticated" ? new URL(auth.serverUrl).host : "—";
+  // Prefer the deployment's configured backend host over the browser
+  // origin when same-origin mode is active — otherwise the user sees
+  // their own LAN URL here instead of the Wallabag/Readeck instance.
+  const serverHost = (() => {
+    if (auth.status !== "authenticated") return "—";
+    if (runtimeCfg?.sameOrigin && runtimeCfg.backendUrl) {
+      try {
+        return new URL(runtimeCfg.backendUrl).host;
+      } catch {
+        // fall through
+      }
+    }
+    try {
+      return new URL(auth.serverUrl).host;
+    } catch {
+      return "—";
+    }
+  })();
+  const sameOriginPinned = runtimeCfg?.sameOrigin === true;
   const backendKind = getBackend().kind;
   const backendLabel = backendKind === "readeck" ? "Readeck" : "Wallabag";
 
   const onChangeServer = () => {
+    if (sameOriginPinned) {
+      const msg =
+        "This deployment is pinned to a backend by the operator (PILCROW_BACKEND_URL). " +
+        "To change it, update the container env var and redeploy.";
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        // eslint-disable-next-line no-alert
+        window.alert(msg);
+      } else {
+        Alert.alert("Server is pinned", msg);
+      }
+      return;
+    }
     const title = "Switch to a different server?";
     const body = "You'll be signed out of this device and asked to sign in again.";
     const go = async () => {
-      await signOut();
-      router.replace("/(auth)/server");
+      try {
+        await signOut();
+        router.replace("/(auth)/server");
+      } catch (e) {
+        surfaceError("Change server", e);
+      }
     };
     if (Platform.OS === "web") {
       // eslint-disable-next-line no-alert
@@ -101,8 +165,12 @@ export default function Settings() {
           >
             <Text className="text-muted text-sm">Server</Text>
             <View className="flex-row items-center">
-              <Text className="text-fg text-sm mr-2">{host}</Text>
-              <Text className="text-subtle text-sm">›</Text>
+              <Text className="text-fg text-sm mr-2">{serverHost}</Text>
+              {sameOriginPinned ? (
+                <Feather name="lock" size={12} color={tokens.subtle} />
+              ) : (
+                <Text className="text-subtle text-sm">›</Text>
+              )}
             </View>
           </Pressable>
         </Section>

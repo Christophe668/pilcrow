@@ -18,8 +18,6 @@ export default function Root({ children }: PropsWithChildren) {
         <meta property="og:title" content={TITLE} />
         <meta property="og:description" content={DESCRIPTION} />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="/assets/landing/og.png" />
-        <meta name="twitter:card" content="summary_large_image" />
         <link rel="icon" href="/favicon.ico" />
         <ScrollViewStyleReset />
       </head>

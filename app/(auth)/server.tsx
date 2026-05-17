@@ -21,6 +21,7 @@ export default function ServerScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [topError, setTopError] = useState<string | null>(null);
   const [sameOrigin, setSameOrigin] = useState(false);
+  const [backendHost, setBackendHost] = useState<string | null>(null);
   const { control, handleSubmit, setValue } = useForm<FormData>({
     resolver: zodResolver(Schema as never) as Resolver<FormData>,
     defaultValues: { serverUrl: "" },
@@ -37,6 +38,13 @@ export default function ServerScreen() {
       if (cancelled || !cfg.sameOrigin || typeof window === "undefined") return;
       setSameOrigin(true);
       setValue("serverUrl", window.location.origin, { shouldDirty: false });
+      if (cfg.backendUrl) {
+        try {
+          setBackendHost(new URL(cfg.backendUrl).host);
+        } catch {
+          // ignore — fall back to no backend label
+        }
+      }
     });
     return () => {
       cancelled = true;
@@ -85,38 +93,45 @@ export default function ServerScreen() {
           />
         </View>
 
-        <Text className="text-fg text-sm mb-2">Server URL</Text>
         {sameOrigin ? (
-          <Text className="text-muted text-xs mb-2">
-            This deployment has a backend pre-configured. Tap Continue.
-          </Text>
-        ) : null}
-        <Controller
-          control={control}
-          name="serverUrl"
-          render={({ field: { value, onChange, onBlur }, fieldState }) => (
-            <View>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                placeholder={
-                  kind === "wallabag"
-                    ? "Server URL (e.g. https://app.wallabag.it)"
-                    : "Server URL (e.g. https://readeck.example.com)"
-                }
-                placeholderTextColor="#888"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                className="border border-border bg-surface text-fg rounded-md px-3 py-3"
-              />
-              {fieldState.error ? (
-                <Text className="text-accent text-xs mt-1">{fieldState.error.message}</Text>
-              ) : null}
-            </View>
-          )}
-        />
+          <View className="border border-border bg-surface rounded-md px-3 py-3 mb-1">
+            <Text className="text-muted text-xs mb-1">Backend</Text>
+            <Text className="text-fg text-sm">{backendHost ?? "configured by the operator"}</Text>
+            <Text className="text-subtle text-xs mt-2">
+              Pinned by this deployment (PILCROW_BACKEND_URL). Tap Continue.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Text className="text-fg text-sm mb-2">Server URL</Text>
+            <Controller
+              control={control}
+              name="serverUrl"
+              render={({ field: { value, onChange, onBlur }, fieldState }) => (
+                <View>
+                  <TextInput
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    placeholder={
+                      kind === "wallabag"
+                        ? "Server URL (e.g. https://app.wallabag.it)"
+                        : "Server URL (e.g. https://readeck.example.com)"
+                    }
+                    placeholderTextColor="#888"
+                    value={value}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    className="border border-border bg-surface text-fg rounded-md px-3 py-3"
+                  />
+                  {fieldState.error ? (
+                    <Text className="text-accent text-xs mt-1">{fieldState.error.message}</Text>
+                  ) : null}
+                </View>
+              )}
+            />
+          </>
+        )}
 
         {topError ? <Text className="text-accent text-sm mt-4">{topError}</Text> : null}
 

@@ -93,14 +93,34 @@ export function completeReadeckSignIn(serverUrl: string): void {
 }
 
 export async function signOut(): Promise<void> {
-  await clearAllData();
-  await resetDb();
-  await clearTokens();
-  await kvRemove("server_url");
-  await kvRemove("last_user_id");
-  await clearActiveBackendKind();
-  // Reset the in-memory adapter back to the Wallabag default so the next
-  // sign-in starts fresh; it'll be re-set on `signIn` / `completeReadeckSignIn`.
+  // Clear lightweight storage + flip the store FIRST. A concurrent
+  // sync transaction on the wasm-backed SQLite driver (web) can leave
+  // the connection in a state where DELETE / close throws; we don't
+  // want that to keep the user signed in with a useless button.
+  await Promise.allSettled([
+    clearTokens(),
+    kvRemove("server_url"),
+    kvRemove("last_user_id"),
+    clearActiveBackendKind(),
+  ]);
   setActiveBackend("wallabag");
   authStore.set({ status: "unauthenticated", serverUrl: null });
+  // Best-effort DB wipe + close. Failures here are logged in dev but
+  // never block the navigation away from the authed surface.
+  try {
+    await clearAllData();
+  } catch (e) {
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn("[auth] clearAllData failed during signOut", e);
+    }
+  }
+  try {
+    await resetDb();
+  } catch (e) {
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn("[auth] resetDb failed during signOut", e);
+    }
+  }
 }

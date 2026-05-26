@@ -242,11 +242,17 @@ end
 -- Pull pass
 ------------------------------------------------------------------------
 
--- Fetch annotations for every cached article and stash them on the
--- cache entry under `server_annotations`. Errors per article are
--- logged and the sweep continues; existing data on the entry is
--- preserved when a fetch fails so a transient hiccup doesn't blank
--- the Highlights view.
+-- Fetch annotations for cached articles the user actually has on
+-- device (downloaded locally, or already known to carry server
+-- annotations) and stash them on the cache entry under
+-- `server_annotations`. Cold cache rows are skipped so the pull
+-- doesn't grind through every article that was ever listed.
+-- Errors per article are logged and the sweep continues; existing
+-- data on the entry is preserved when a fetch fails so a transient
+-- hiccup doesn't blank the Highlights view.
+--
+-- `on_step(done, total, fetched)` is invoked after each article;
+-- `total` is the count of selected targets, not the full cache size.
 --
 -- Returns `{ fetched, articles, failed }` where `fetched` is the total
 -- annotation count across all articles, `articles` is the number of
@@ -267,27 +273,42 @@ function M.pullAll(cache, client, on_step)
         return counters
     end
 
-    local ids = cache:listIds()
-    for _, id in ipairs(ids) do
+    -- Narrow the sweep to articles the user has actually touched
+    -- locally, or that already have server annotations cached. A cold
+    -- cache entry (listed but never opened, no prior pull) would
+    -- contribute an empty result and a round-trip; skipping it is the
+    -- biggest single win on the pull's tail latency.
+    local targets = {}
+    for _, id in ipairs(cache:listIds()) do
         local article = cache:get(id)
         if article then
-            local ok, list_or_err = client:listAnnotations(id)
-            if not ok then
-                counters.failed = counters.failed + 1
-                logger.warn("pilcrow/annotationsync: pull failed for", id, list_or_err)
-            else
-                local normalized = {}
-                if type(list_or_err) == "table" then
-                    for _, raw in ipairs(list_or_err) do
-                        normalized[#normalized + 1] = normalize(raw)
-                    end
-                end
-                cache:setFlag(id, "server_annotations", normalized)
-                counters.articles = counters.articles + 1
-                counters.fetched = counters.fetched + #normalized
-                if on_step then on_step(counters.articles, counters.fetched) end
+            local has_local  = article.local_path and article.local_path ~= ""
+            local has_server = type(article.server_annotations) == "table"
+                               and #article.server_annotations > 0
+            if has_local or has_server then
+                targets[#targets + 1] = id
             end
         end
+    end
+
+    local total = #targets
+    for i, id in ipairs(targets) do
+        local ok, list_or_err = client:listAnnotations(id)
+        if not ok then
+            counters.failed = counters.failed + 1
+            logger.warn("pilcrow/annotationsync: pull failed for", id, list_or_err)
+        else
+            local normalized = {}
+            if type(list_or_err) == "table" then
+                for _, raw in ipairs(list_or_err) do
+                    normalized[#normalized + 1] = normalize(raw)
+                end
+            end
+            cache:setFlag(id, "server_annotations", normalized)
+            counters.articles = counters.articles + 1
+            counters.fetched = counters.fetched + #normalized
+        end
+        if on_step then on_step(i, total, counters.fetched) end
     end
 
     return counters

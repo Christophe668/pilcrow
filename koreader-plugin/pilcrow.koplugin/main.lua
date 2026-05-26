@@ -376,10 +376,14 @@ function Pilcrow:_maybeAutoSync()
     if minutes > 0 and (os.time() - last) < (minutes * 60) then return end
 
     -- Defer one tick so the cached queue paints before we block on HTTP.
+    -- Auto-sync is a light pass: refresh the unread / starred lists and
+    -- push any pending highlights. Image previews and per-article
+    -- annotation pulls are deferred to an explicit manual sync, which
+    -- can do the full sweep without delaying the user's reading.
     UIManager:nextTick(function()
         self:syncNow(function()
             if self._queue then self._queue:reload() end
-        end, { quiet = true })
+        end, { quiet = true, full = false })
     end)
 end
 
@@ -492,7 +496,13 @@ function Pilcrow:syncNow(refresh_cb, opts)
                 UIManager:show(InfoMessage:new{ text = summary, timeout = 3 })
             end
             if refresh_cb then refresh_cb() end
-        end, { set_progress = set_progress, title = title })
+        end, {
+            set_progress = set_progress,
+            title        = title,
+            -- Default to a full sweep so explicit user-triggered syncs
+            -- (Dispatcher action, "Sync" button) always do the heavy work.
+            full         = (opts.full ~= false),
+        })
     end
 
     -- For an explicit sync we want to wait for connectivity; for an auto
@@ -506,6 +516,7 @@ function Pilcrow:_doSync(done_cb, ctx)
     ctx = ctx or {}
     local set_progress = ctx.set_progress or function() end
     local title = ctx.title or self:_backendTitle()
+    local full = (ctx.full ~= false)
     local per_page = self.settings:get("articles_per_sync") or 30
 
     set_progress(T(_("%1: fetching unread articles…"), title))
@@ -548,8 +559,9 @@ function Pilcrow:_doSync(done_cb, ctx)
     -- Optionally fetch preview images. Best-effort: any failure is logged
     -- and we continue. This serializes downloads (Lua's HTTP client is
     -- blocking) but at most touches `articles_per_sync` images.
+    -- Skipped on light (auto) syncs so returning from background stays snappy.
     local images_dl, images_skipped = 0, 0
-    if self.settings:get("download_images") then
+    if full and self.settings:get("download_images") then
         self:_ensureImageDir()
 
         -- Count first so we can show "N of M" instead of just a running tally.
@@ -604,9 +616,12 @@ function Pilcrow:_doSync(done_cb, ctx)
     -- view reflects the freshest set including the ones we just sent.
     -- Best-effort throughout: per-article failures are logged inside
     -- the module, never abort the sweep.
+    --
+    -- Light syncs push (cheap — usually nothing to send) but skip the
+    -- per-article pull, which is the slow tail of a full sync.
     local push_counters = { pushed = 0, skipped = 0, failed = 0 }
     local pull_counters = { fetched = 0, articles = 0, failed = 0 }
-    if self.client.createAnnotation or self.client.listAnnotations then
+    if self.client.createAnnotation or (full and self.client.listAnnotations) then
         local AnnotationSync = require("annotationsync")
         if self.client.createAnnotation then
             set_progress(T(_("%1: pushing highlights…"), title))
@@ -614,10 +629,11 @@ function Pilcrow:_doSync(done_cb, ctx)
                 set_progress(T(_("%1: pushing highlights… %2 pushed"), title, pushed))
             end)
         end
-        if self.client.listAnnotations then
+        if full and self.client.listAnnotations then
             set_progress(T(_("%1: pulling highlights…"), title))
-            pull_counters = AnnotationSync.pullAll(self.cache, self.client, function(_a, fetched)
-                set_progress(T(_("%1: pulling highlights… %2 received"), title, fetched))
+            pull_counters = AnnotationSync.pullAll(self.cache, self.client, function(done, total, _fetched)
+                set_progress(T(_("%1: pulling highlights… %2 / %3"),
+                               title, done, total))
             end)
         end
     end

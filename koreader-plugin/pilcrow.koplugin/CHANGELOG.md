@@ -7,6 +7,19 @@ than its own roadmap.
 
 ## [Unreleased]
 
+### Changed
+
+- **Auto-sync is now a light pass.** Returning from background only
+  refreshes the unread + starred lists and pushes any pending local
+  highlights. Preview-image downloads and the per-article annotation
+  pull are reserved for an explicit manual sync, so opening Pilcrow
+  no longer blocks on the slow tail when the cache is large.
+- **Manual sync feels finite.** The highlight-pull progress now shows
+  `N / M` instead of a running counter, and cold cache entries
+  (articles never downloaded and with no prior server annotations)
+  are skipped — the pull only touches articles the user has actually
+  read or already has annotations for.
+
 ### Added
 
 - **Highlight sync, both directions, both backends.** KOReader highlights

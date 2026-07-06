@@ -10,6 +10,7 @@ import { hydrateAuth } from "@/auth/state";
 import { useAuth } from "@/hooks/useAuth";
 import { useBootstrapSync } from "@/hooks/useBootstrapSync";
 import { decideRoute } from "@/lib/route-decision";
+import { registerServiceWorker } from "@/lib/register-sw";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -41,6 +42,10 @@ export default function RootLayout() {
   const { loaded, error } = useAppFonts();
   const [hydrated, setHydrated] = useState(false);
   const [fontTimeout, setFontTimeout] = useState(false);
+
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

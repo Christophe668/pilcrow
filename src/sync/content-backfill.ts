@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { getBackend } from "@/api/backend";
 import { upsertArticleByBackendId } from "@/db/repos/articles";
 import { extractImageSources } from "@/images/rewrite";
+import { pullAnnotationsForArticle } from "./annotations-pull";
 import { dataEvents } from "./events";
 
 /**
@@ -92,6 +93,16 @@ async function run(): Promise<BackfillResult> {
         result.fetched += 1;
         dataEvents.emit({ kind: "article", id: row.id });
         if (result.fetched % EMIT_EVERY === 0) dataEvents.emit({ kind: "articles" });
+
+        // The row just became readable — bring its server annotations
+        // along so highlights are there on first open. Best-effort like
+        // the rest of the sweep: the next sync's pull covers a miss.
+        if (backend.capabilities.annotations) {
+          await pullAnnotationsForArticle(db, backend, {
+            id: row.id,
+            backend_id: row.backend_id,
+          }).catch(() => {});
+        }
 
         if (
           Platform.OS !== "web" &&

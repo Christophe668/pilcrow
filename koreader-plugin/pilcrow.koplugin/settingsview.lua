@@ -38,6 +38,10 @@ local DEFAULTS = {
     download_directory      = "",      -- empty -> default under data dir
     -- Image previews
     download_images         = true,
+    -- Download article epubs during sync so the queue is readable
+    -- offline. Full syncs sweep everything missing; light auto-syncs
+    -- only fetch newly arrived articles.
+    download_articles       = true,
     -- Apply our bundled code-block CSS tweak to articles when opened.
     apply_code_style        = true,
     -- Return to the Pilcrow queue when an article reaches its end.
@@ -262,6 +266,7 @@ function Settings:_showSyncSection()
                 DEFAULTS.articles_per_sync, 1),
             self:_toggleRow("auto_sync_on_wifi", _("Auto-sync when WiFi is on")),
             stale_row,
+            self:_toggleRow("download_articles", _("Download articles during sync (read offline)")),
             self:_toggleRow("download_images", _("Download preview images during sync")),
             {{ text = _("← Back"),
                callback = function() UIManager:close(dialog); self:_showTop() end }},

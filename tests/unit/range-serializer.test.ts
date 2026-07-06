@@ -65,17 +65,18 @@ describe("serializeRange (single-block)", () => {
     });
   });
 
-  it("clamps multi-block ranges to the start element", () => {
+  it("emits distinct start/end paths for a multi-block range", () => {
     setHtml("<p>first</p><p>second</p>");
     const ps = root.querySelectorAll("p");
     const range = document.createRange();
     range.setStart(ps[0]!.firstChild!, 1);
     range.setEnd(ps[1]!.firstChild!, 3);
-    const ser = serializeRange(range, root);
-    expect(ser?.start).toBe("/p[1]");
-    expect(ser?.end).toBe("/p[1]");
-    expect(ser?.startOffset).toBe(1);
-    expect(ser?.endOffset).toBe(5);
+    expect(serializeRange(range, root)).toEqual({
+      start: "/p[1]",
+      startOffset: 1,
+      end: "/p[2]",
+      endOffset: 3,
+    });
   });
 });
 
@@ -139,5 +140,43 @@ describe("serialize → deserialize round trip", () => {
       expect(back).not.toBeNull();
       expect(back!.toString()).toBe(range.toString());
     }
+  });
+
+  it("preserves a selection spanning multiple paragraphs", () => {
+    setHtml("<p>first paragraph</p><p>middle one</p><p>last paragraph</p>");
+    const ps = root.querySelectorAll("p");
+    const range = document.createRange();
+    range.setStart(ps[0]!.firstChild!, 6);
+    range.setEnd(ps[2]!.firstChild!, 4);
+    expect(range.toString()).toBe("paragraphmiddle onelast");
+    const ser = serializeRange(range, root);
+    expect(ser).toEqual({
+      start: "/p[1]",
+      startOffset: 6,
+      end: "/p[3]",
+      endOffset: 4,
+    });
+    const back = deserializeRange(ser!, root);
+    expect(back).not.toBeNull();
+    expect(back!.toString()).toBe(range.toString());
+  });
+
+  it("preserves a multi-block selection ending inside a nested element", () => {
+    setHtml("<p>alpha beta</p><p>gamma <em>delta</em> epsilon</p>");
+    const ps = root.querySelectorAll("p");
+    const em = root.querySelector("em")!;
+    const range = document.createRange();
+    range.setStart(ps[0]!.firstChild!, 6);
+    range.setEnd(em.firstChild!, 3);
+    const ser = serializeRange(range, root);
+    expect(ser).toEqual({
+      start: "/p[1]",
+      startOffset: 6,
+      end: "/p[2]/em[1]",
+      endOffset: 3,
+    });
+    const back = deserializeRange(ser!, root);
+    expect(back).not.toBeNull();
+    expect(back!.toString()).toBe(range.toString());
   });
 });

@@ -8,7 +8,11 @@ let nextTempId = -1;
 
 export async function createEntryAction(url: string, tags?: readonly string[]): Promise<number> {
   const db = await getDb();
-  const tempId = nextTempId--;
+  // Seed below any temp row already persisted — the in-memory counter
+  // resets on restart and must not collide with undrained offline saves.
+  const minRow = await db.get<{ min: number | null }>("SELECT MIN(id) AS min FROM articles");
+  const tempId = Math.min(nextTempId, Math.min(0, minRow?.min ?? 0) - 1);
+  nextTempId = tempId - 1;
   const now = new Date().toISOString();
 
   await upsertArticles(db, [

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { runInitialSync, runIncrementalSync } from "@/sync/engine";
+import { backfillMissingContent } from "@/sync/content-backfill";
 import { drainOutbox } from "@/sync/outbox-drainer";
 import { getDb } from "@/db";
 import { getSyncValue } from "@/db/repos/sync-state";
@@ -39,13 +40,17 @@ export function useBootstrapSync(): void {
         await runIncrementalSync().catch(logSyncError("incremental-sync"));
       }
       if (!cancelled) initialDoneRef.current = true;
+      // Fire-and-forget: fill in article bodies (and, on native, their
+      // images) so the library is readable offline. Never blocks the UI.
+      void backfillMissingContent().catch(logSyncError("content-backfill"));
     })();
 
     const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
       if (state === "active" && initialDoneRef.current) {
         void drainOutbox()
           .catch(logSyncError("outbox-drain"))
-          .then(() => runIncrementalSync().catch(logSyncError("incremental-sync")));
+          .then(() => runIncrementalSync().catch(logSyncError("incremental-sync")))
+          .then(() => backfillMissingContent().catch(logSyncError("content-backfill")));
       }
     });
 

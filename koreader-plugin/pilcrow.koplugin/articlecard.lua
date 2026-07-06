@@ -188,6 +188,23 @@ local function format_age(created_at)
         hour = tonumber(hh), min = tonumber(mm), sec = tonumber(ss),
     })
     if not ts then return "" end
+    -- os.time read the fields as device-local time, but the server sends
+    -- an explicit zone ("Z" or "+02:00"). Shift by (device offset − source
+    -- offset) so ages don't drift by the timezone gap.
+    local tail = created_at:sub(20)
+    local sign, oh, om = tail:match("([+-])(%d%d):?(%d%d)")
+    local src_offset = 0
+    if sign then
+        src_offset = (tonumber(oh) * 3600 + tonumber(om) * 60) * (sign == "-" and -1 or 1)
+    elseif not tail:match("^Z") then
+        -- No zone info: keep the historical local-time interpretation.
+        src_offset = nil
+    end
+    if src_offset then
+        local now = os.time()
+        local local_offset = os.difftime(now, os.time(os.date("!*t", now)))
+        ts = ts + local_offset - src_offset
+    end
     local delta = os.time() - ts
     if delta < 60                then return _("just now") end
     if delta < 3600              then return string.format(_("%dm ago"), math.floor(delta/60)) end

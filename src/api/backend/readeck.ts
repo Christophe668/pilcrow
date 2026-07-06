@@ -102,11 +102,21 @@ export const ReadeckBackend: Backend = {
       ...(args.starred !== undefined ? { is_marked: args.starred } : {}),
       ...(args.tagSlug !== undefined ? { labels: args.tagSlug } : {}),
     });
-    const total = result.totalCount ?? result.items.length;
-    const totalPages = Math.max(1, Math.ceil(total / args.perPage));
+    // Total-Count can be missing (CORS without Access-Control-Expose-Headers,
+    // header-stripping proxies). Falling back to items.length would report
+    // totalPages=1 and silently truncate the sync to one page — instead,
+    // keep advertising "one more page" until the server returns a short page.
+    const page = result.currentPage ?? args.page;
+    const totalPages =
+      result.totalCount != null
+        ? Math.max(1, Math.ceil(result.totalCount / args.perPage))
+        : result.items.length < args.perPage
+          ? page
+          : page + 1;
+    const total = result.totalCount ?? (page - 1) * args.perPage + result.items.length;
     return {
       items: result.items.map((b) => bookmarkToArticle(b)),
-      page: result.currentPage ?? args.page,
+      page,
       totalPages,
       total,
     };

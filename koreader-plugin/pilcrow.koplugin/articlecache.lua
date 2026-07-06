@@ -116,7 +116,8 @@ function Cache:_flush()
     end
     fh:write(encoded)
     fh:close()
-    os.remove(self.path)
+    -- rename() replaces the destination atomically on POSIX; removing
+    -- first would open a window where a crash leaves no cache at all.
     local ok, rerr = os.rename(tmp, self.path)
     if not ok then
         logger.err("pilcrow: cache rename failed:", rerr)
@@ -158,7 +159,10 @@ end
 --- when the article's state changes meaningfully.
 local function is_in_progress(article, mem)
     if not article or article.is_archived or article.finished then return false end
-    local id  = article.id
+    -- Key by string: `invalidateProgress` receives ids from callers that
+    -- may hold either the numeric Wallabag id or a string; a numeric key
+    -- here would never match its tostring()-based removal.
+    local id  = tostring(article.id)
     if mem and mem[id] ~= nil then return mem[id] end
     local path = article.local_path
     local result = false
@@ -339,8 +343,12 @@ local function extract_tags(article)
     return out
 end
 
---- Upsert an article from a Wallabag API entry. Preserves local_path,
---  image_path and finished from any existing cache row.
+--- Upsert an article from a Wallabag API entry. Preserves the fields
+--  only this device knows about — local_path, image_path, finished,
+--  and the annotation bookkeeping. Dropping pushed_annotations here
+--  would make every sync re-upload every highlight (the server APIs
+--  are not idempotent), and dropping server_annotations would blank
+--  the Highlights view on light syncs that skip the pull pass.
 function Cache:upsertFromApi(api_article)
     local id = api_article.id
     if not id then return end
@@ -360,6 +368,8 @@ function Cache:upsertFromApi(api_article)
         local_path      = existing.local_path,
         image_path      = existing.image_path,
         finished        = existing.finished or false,
+        pushed_annotations = existing.pushed_annotations,
+        server_annotations = existing.server_annotations,
     }
 end
 

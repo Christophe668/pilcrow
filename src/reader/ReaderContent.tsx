@@ -31,6 +31,8 @@ export type ReaderContentHandle = {
 export type ReaderContentProps = {
   document: string;
   initialScroll?: number;
+  /** Bridge has registered its listeners; safe to post host messages. */
+  onReady?: () => void;
   onScroll?: (position: number) => void;
   onSelection?: (text: string, ranges: SerializedRange) => void;
   onSelectionCleared?: () => void;
@@ -119,6 +121,7 @@ function dispatch(msg: BridgeMessage, props: ReaderContentProps) {
       props.onAnnotationWarning?.(msg.id, msg.reason);
       return;
     case "ready":
+      props.onReady?.();
       return;
   }
 }
@@ -139,6 +142,12 @@ const ReaderContentWeb = forwardRef<ReaderContentHandle, ReaderContentProps>(
 
     useEffect(() => {
       const onMsg = (e: MessageEvent) => {
+        // Only accept messages from our iframe. Can't check e.origin — the
+        // sandboxed srcdoc frame has an opaque origin ("null"), which any
+        // other sandboxed frame would share — so compare the window itself.
+        if (!innerRef.current?.contentWindow || e.source !== innerRef.current.contentWindow) {
+          return;
+        }
         const msg = parseMsg(e.data);
         if (!msg) return;
         if (
@@ -162,7 +171,11 @@ const ReaderContentWeb = forwardRef<ReaderContentHandle, ReaderContentProps>(
         ref={innerRef}
         title="Reader"
         srcDoc={props.document}
-        sandbox="allow-same-origin allow-scripts"
+        // No allow-same-origin: the article HTML is third-party content, and
+        // pairing it with allow-scripts would hand its scripts the app's
+        // origin (localStorage holds the access token). The opaque origin
+        // still allows postMessage both ways with targetOrigin "*".
+        sandbox="allow-scripts"
         style={{ flex: 1, border: 0, width: "100%", height: "100%" } as React.CSSProperties}
       />
     );

@@ -14,7 +14,11 @@ function articleToUpsert(a: Article, backend: Backend): ArticleUpsert {
     title: a.title,
     url: a.url,
     domain_name: a.domainName,
-    content: a.content,
+    // Never write a null body over a row that may already hold one. List
+    // endpoints legitimately return no content (metadata-detail pages,
+    // and Readeck lists always omit it) — treating that null as truth
+    // would wipe content we already downloaded and break offline reading.
+    ...(a.content !== null ? { content: a.content } : {}),
     preview_picture: a.previewPicture,
     reading_time: a.readingTime,
     language: a.language,
@@ -68,13 +72,13 @@ async function upsertTagsAndAttach(backend: Backend, articles: readonly Article[
   );
 
   // Resolve the local article id for each article (it was just upserted),
-  // then attach the resolved local tag ids.
+  // then attach the resolved local tag ids. An empty tag list still goes
+  // through attachTags — that's how a server-side "remove last tag"
+  // propagates (attachTags is delete-then-insert).
   for (const a of articles) {
-    if (a.tags.length === 0) continue;
     const localTagIds = a.tags
       .map((t) => tagBackendIdToLocal.get(t.id))
       .filter((x): x is number => x !== undefined);
-    if (localTagIds.length === 0) continue;
     // The article was already upserted by the caller; look up its local id
     // by backend_id rather than tracking it through an out-param.
     const articleRow = await db.get<{ id: number }>(
@@ -106,7 +110,32 @@ async function syncTagsFromBackend(backend: Backend): Promise<void> {
   );
 }
 
-export async function runInitialSync(): Promise<void> {
+// Single-flight guards: pull-to-refresh and the AppState-resume handler
+// can fire at the same time; two interleaved syncs would race on
+// last_since and double-apply work. Joining the in-flight run is always
+// the right behaviour for a "sync now" caller.
+let initialInFlight: Promise<void> | null = null;
+let incrementalInFlight: Promise<void> | null = null;
+
+export function runInitialSync(): Promise<void> {
+  if (!initialInFlight) {
+    initialInFlight = doRunInitialSync().finally(() => {
+      initialInFlight = null;
+    });
+  }
+  return initialInFlight;
+}
+
+export function runIncrementalSync(): Promise<void> {
+  if (!incrementalInFlight) {
+    incrementalInFlight = doRunIncrementalSync().finally(() => {
+      incrementalInFlight = null;
+    });
+  }
+  return incrementalInFlight;
+}
+
+async function doRunInitialSync(): Promise<void> {
   const db = await getDb();
   const backend = getBackend();
   await syncTagsFromBackend(backend);
@@ -135,7 +164,12 @@ export async function runInitialSync(): Promise<void> {
   }
 
   if (mostRecent) {
-    await setSyncValue(db, "last_since", String(Math.floor(Date.parse(mostRecent) / 1000)));
+    // Guard against unparseable server timestamps: persisting "NaN" would
+    // poison every future sync's since parameter.
+    const sinceEpoch = Math.floor(Date.parse(mostRecent) / 1000);
+    if (Number.isFinite(sinceEpoch)) {
+      await setSyncValue(db, "last_since", String(sinceEpoch));
+    }
   }
   await setSyncValue(db, "last_full_sync_at", new Date().toISOString());
 
@@ -144,7 +178,7 @@ export async function runInitialSync(): Promise<void> {
   dataEvents.emit({ kind: "sync-status" });
 }
 
-export async function runIncrementalSync(): Promise<void> {
+async function doRunIncrementalSync(): Promise<void> {
   const db = await getDb();
   const backend = getBackend();
   await syncTagsFromBackend(backend);
@@ -179,7 +213,12 @@ export async function runIncrementalSync(): Promise<void> {
   }
 
   if (mostRecent) {
-    await setSyncValue(db, "last_since", String(Math.floor(Date.parse(mostRecent) / 1000)));
+    // Guard against unparseable server timestamps: persisting "NaN" would
+    // poison every future sync's since parameter.
+    const sinceEpoch = Math.floor(Date.parse(mostRecent) / 1000);
+    if (Number.isFinite(sinceEpoch)) {
+      await setSyncValue(db, "last_since", String(sinceEpoch));
+    }
   }
 
   dataEvents.emit({ kind: "articles" });

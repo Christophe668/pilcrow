@@ -7,6 +7,35 @@ than its own roadmap.
 
 ## [Unreleased]
 
+## [2026.07.0] - 2026-07-06
+
+### Added
+
+- **Articles download during sync.** A manual sync fetches every missing
+  article EPUB (with progress) and a light auto-sync fetches new arrivals
+  only, behind a settings toggle — the whole queue is readable fully
+  offline, not just articles that were opened once before.
+
+### Fixed
+
+- Highlight bookkeeping now survives sync upserts: pushed/server
+  annotation state is preserved (highlights were re-uploaded as
+  duplicates on every sync, and the Highlights view emptied on light
+  syncs), and the cache is saved right after the push pass.
+- Offline "mark as read" flags are pushed at sync start (previously they
+  never reached the server), and articles archived or unstarred on other
+  clients are reconciled when the fetch window is complete.
+- An and/or short-circuit could archive an article after a failed
+  unarchive.
+- Quiet auto-syncs no longer flash progress popups; the queue reloads
+  when shown again.
+- Cache flushes are atomic; the download directory is created
+  recursively; article ages are timezone-correct.
+- Self-update: pre-release-safe version comparison and sanitized release
+  asset names; UTF-8-safe filename truncation.
+
+## [2026.05.3] - 2026-05-26
+
 ### Changed
 
 - **Auto-sync is now a light pass.** Returning from background only
@@ -19,6 +48,28 @@ than its own roadmap.
   (articles never downloaded and with no prior server annotations)
   are skipped — the pull only touches articles the user has actually
   read or already has annotations for.
+
+## [2026.05.2] - 2026-05-16
+
+### Changed
+
+- **Reading progress lives on the thumbnail.** The right-column
+  percentage + "read" caption is replaced by a slim filled progress bar
+  along the bottom of the thumbnail; terminal states ("done" /
+  "skipped") append to the meta line. Frees body width for longer
+  titles.
+
+### Fixed
+
+- Self-update reported version 0.0.0 and "Install" failed with "Could
+  not locate the plugin directory": the plugin directory and version are
+  now stashed on SettingsView at init instead of fetched through a
+  `require("main")` that silently returned nil.
+
+## [2026.05.1] - 2026-05-16
+
+First packaged release. (`2026.05.0`, published minutes earlier, is an
+identical build that exercised the release workflow.)
 
 ### Added
 
@@ -39,9 +90,6 @@ than its own roadmap.
     overlaid on the article — KOReader's own highlight UI is the
     authoritative experience on-page.
     New modules: `annotationsync.lua`, `highlightsview.lua`.
-
-### Added
-
 - **Readeck backend** alongside Wallabag. Pick the backend in
   Settings → Backend; Readeck reads credentials (server URL + bearer
   access token) from `<settings_dir>/readeck.lua` and exposes the same
@@ -51,9 +99,6 @@ than its own roadmap.
   switching is non-destructive (`readeck-cache.json`,
   `readeck-articles/`, `readeck-images/`).
 - `backendclient.lua` factory module and `readeckclient.lua` REST client.
-
-### Added
-
 - `_meta.lua`, `main.lua`, `queueview.lua`, `articlerow.lua`,
   `settingsview.lua`, `cache.lua`, `wallabagclient.lua`.
 - Fullscreen Wallabag queue with filter (unread / starred / archived / all)

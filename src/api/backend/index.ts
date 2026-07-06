@@ -36,6 +36,7 @@ export type {
   BackendKind,
   BackendTag,
   Capabilities,
+  ChangeLogEntry,
   CreateAnnotationInput,
   ListArticlesArgs,
   TagId,

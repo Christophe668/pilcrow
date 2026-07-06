@@ -64,6 +64,13 @@ export type BackendAnnotation = {
   updatedAt: string;
 };
 
+export type ChangeLogEntry = {
+  id: ArticleId;
+  /** RFC 3339 timestamp of the change, as reported by the server. */
+  time: string;
+  type: "update" | "delete";
+};
+
 export type ArticlesPage = {
   items: Article[];
   page: number;
@@ -112,6 +119,15 @@ export interface Backend {
   readonly capabilities: Capabilities;
 
   listArticles(args: ListArticlesArgs): Promise<ArticlesPage>;
+  /**
+   * Optional per-article change log. Backends that can report deletions
+   * incrementally (Readeck via /api/bookmarks/sync) implement this; the
+   * sync engine falls back to periodic full-listing sweeps otherwise.
+   * Without `since` the server returns only currently-existing articles
+   * (no delete entries), so callers must treat that response as an
+   * existence snapshot to diff against, not as an incremental log.
+   */
+  listChanges?(args: { since?: string }): Promise<ChangeLogEntry[]>;
   getArticle(id: ArticleId): Promise<Article>;
   createArticle(url: string, tagLabels?: readonly string[]): Promise<Article>;
   patchArticle(id: ArticleId, patch: ArticlePatch): Promise<Article>;

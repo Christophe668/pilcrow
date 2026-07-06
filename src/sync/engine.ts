@@ -3,6 +3,7 @@ import { getBackend } from "@/api/backend";
 import { upsertArticleByBackendId, type ArticleUpsert } from "@/db/repos/articles";
 import { upsertTagsByBackendId, attachTags } from "@/db/repos/tags";
 import { setSyncValue, getSyncValue } from "@/db/repos/sync-state";
+import { pullAnnotations } from "./annotations-pull";
 import { dataEvents } from "./events";
 import type { Article, Backend } from "@/api/backend";
 
@@ -163,6 +164,8 @@ async function doRunInitialSync(): Promise<void> {
     if (totalPages === 0) break;
   }
 
+  await pullAnnotations(db, backend);
+
   if (mostRecent) {
     // Guard against unparseable server timestamps: persisting "NaN" would
     // poison every future sync's since parameter.
@@ -211,6 +214,8 @@ async function doRunIncrementalSync(): Promise<void> {
     page += 1;
     if (totalPages === 0) break;
   }
+
+  await pullAnnotations(db, backend);
 
   if (mostRecent) {
     // Guard against unparseable server timestamps: persisting "NaN" would

@@ -160,6 +160,35 @@ describe("backfillMissingContent", () => {
     expect(requests).toBeLessThan(30);
   });
 
+  it("pulls the article's server annotations along with its body", async () => {
+    await insertRow(1, null);
+    server.use(
+      http.get("https://wb.test/api/entries/1.json", () =>
+        HttpResponse.json(entry(1, "<p>body 1</p>")),
+      ),
+      http.get("https://wb.test/api/annotations/1.json", () =>
+        HttpResponse.json({
+          total: 1,
+          rows: [
+            {
+              id: 9,
+              quote: "server highlight",
+              text: null,
+              ranges: [{ start: "/p[1]", startOffset: 0, end: "/p[1]", endOffset: 4 }],
+              created_at: "2026-06-01T00:00:00Z",
+              updated_at: "2026-06-01T00:00:00Z",
+            },
+          ],
+        }),
+      ),
+    );
+
+    await backfillMissingContent();
+
+    const anno = await db.get<{ quote: string }>("SELECT quote FROM annotations WHERE id = 9");
+    expect(anno?.quote).toBe("server highlight");
+  });
+
   it("skips deleted-pending rows and rows without a backend id", async () => {
     await insertRow(1, null);
     await db.run("UPDATE articles SET pending_op = 'delete' WHERE id = 1");

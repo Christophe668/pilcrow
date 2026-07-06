@@ -91,6 +91,48 @@ describe("runIncrementalSync", () => {
     expect(Number(stored?.value)).toBeGreaterThan(1700000000);
   });
 
+  it("pulls server annotations for articles with local content", async () => {
+    await db.run(
+      "INSERT INTO articles (id, backend_id, url, title, content) VALUES (?, ?, ?, ?, ?)",
+      [50, "50", "https://x/50", "Old", "<p>body</p>"],
+    );
+    server.use(
+      http.get("https://wb.test/api/entries.json", () =>
+        HttpResponse.json({
+          page: 1,
+          pages: 0,
+          limit: 100,
+          total: 0,
+          _embedded: { items: [] },
+        }),
+      ),
+      http.get("https://wb.test/api/tags.json", () => HttpResponse.json([])),
+      http.get("https://wb.test/api/annotations/50.json", () =>
+        HttpResponse.json({
+          total: 1,
+          rows: [
+            {
+              id: 7,
+              quote: "from another device",
+              text: null,
+              ranges: [{ start: "/p[1]", startOffset: 0, end: "/p[1]", endOffset: 19 }],
+              created_at: "2026-06-01T00:00:00Z",
+              updated_at: "2026-06-01T00:00:00Z",
+            },
+          ],
+        }),
+      ),
+    );
+
+    await runIncrementalSync();
+
+    const row = await db.get<{ backend_id: string; quote: string }>(
+      "SELECT backend_id, quote FROM annotations WHERE id = 7",
+    );
+    expect(row?.backend_id).toBe("7");
+    expect(row?.quote).toBe("from another device");
+  });
+
   it("upserts updated entries", async () => {
     await db.run(
       "INSERT INTO articles (id, backend_id, url, title, updated_at) VALUES (?, ?, ?, ?, ?)",

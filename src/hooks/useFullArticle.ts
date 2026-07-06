@@ -5,6 +5,7 @@ import { getArticle, upsertArticleByBackendId, type ArticleUpsert } from "@/db/r
 import { tagsForArticle, attachTags, upsertTagsByBackendId } from "@/db/repos/tags";
 import { getBackend } from "@/api/backend";
 import type { Article, Backend } from "@/api/backend";
+import { pullAnnotationsForArticle } from "@/sync/annotations-pull";
 import { dataEvents } from "@/sync/events";
 
 function articleToUpsert(a: Article, backend: Backend): ArticleUpsert {
@@ -34,13 +35,14 @@ function articleToUpsert(a: Article, backend: Backend): ArticleUpsert {
   return row;
 }
 
-async function fetchOne(id: number) {
+export async function fetchFullArticle(id: number) {
   const db = await getDb();
   let row = await getArticle(db, id);
 
   if (row && row.content === null && row.backend_id !== null) {
     const backend = getBackend();
-    const article = await backend.getArticle(row.backend_id).catch(() => null);
+    const backendId = row.backend_id;
+    const article = await backend.getArticle(backendId).catch(() => null);
     if (article) {
       await upsertArticleByBackendId(db, articleToUpsert(article, backend));
       if (article.tags.length > 0) {
@@ -64,6 +66,13 @@ async function fetchOne(id: number) {
           .filter((x): x is number => x !== undefined);
         if (localTagIds.length > 0) await attachTags(db, id, localTagIds);
       }
+      // The article just gained content — bring its server-side
+      // annotations along so highlights render on first open.
+      if (backend.capabilities.annotations) {
+        await pullAnnotationsForArticle(db, backend, { id, backend_id: backendId }).catch((e) =>
+          console.warn(`[annotations-pull] article ${id}:`, e),
+        );
+      }
       row = await getArticle(db, id);
     }
   }
@@ -84,7 +93,7 @@ export function useFullArticle(id: number) {
   }, [qc, id]);
   return useQuery({
     queryKey: ["full-article", id],
-    queryFn: () => fetchOne(id),
+    queryFn: () => fetchFullArticle(id),
     staleTime: 0,
   });
 }

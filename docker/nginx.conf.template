@@ -43,6 +43,15 @@ server {
         try_files $uri =404;
     }
 
+    # Service worker must never be cached hard: browsers revalidate it
+    # on navigation, and `no-cache` guarantees a new deploy's worker
+    # (with its new cache version) is picked up right away.
+    location = /sw.js {
+        access_log off;
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
+    }
+
     ${PILCROW_BACKEND_PROXY}
 
     # Hashed asset bundle is content-addressed; cache hard.

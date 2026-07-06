@@ -241,6 +241,7 @@ function Client:listEntries(opts)
         local path = "/api/entries.json?" .. table.concat(query, "&")
         local ok, data = with_auth(self, function() return self:_request("GET", path) end)
         if not ok then return false, data end
+        if type(data) ~= "table" then return false, "json_error" end
 
         local items = (data._embedded and data._embedded.items) or {}
         for _, item in ipairs(items) do results[#results + 1] = item end

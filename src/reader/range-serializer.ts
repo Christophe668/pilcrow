@@ -91,16 +91,19 @@ export function serializeRange(range: Range, root: Element): SerializedRange | n
     startOffset = 0;
   }
 
-  if (endBlock && startBlock === endBlock) {
-    let endOffset: number;
-    if (range.endContainer.nodeType === Node.TEXT_NODE) {
-      endOffset = elementOffsetFor(startBlock, range.endContainer as Text, range.endOffset);
-    } else {
-      endOffset = elementTextLength(startBlock);
+  if (endBlock) {
+    const endPath = endBlock === startBlock ? startPath : elementPathFromRoot(endBlock, root);
+    if (endPath) {
+      const endOffset =
+        range.endContainer.nodeType === Node.TEXT_NODE
+          ? elementOffsetFor(endBlock, range.endContainer as Text, range.endOffset)
+          : elementTextLength(endBlock);
+      return { start: startPath, startOffset, end: endPath, endOffset };
     }
-    return { start: startPath, startOffset, end: startPath, endOffset };
   }
 
+  // End block missing or unpathable — clamp to the start block so the
+  // highlight degrades to a prefix instead of being dropped entirely.
   return {
     start: startPath,
     startOffset,
@@ -253,11 +256,14 @@ export const RANGE_SERIALIZER_SOURCE = `
     var startOffset = range.startContainer.nodeType === 3
       ? elementOffsetFor(startBlock, range.startContainer, range.startOffset)
       : 0;
-    if (endBlock && startBlock === endBlock) {
-      var endOffset = range.endContainer.nodeType === 3
-        ? elementOffsetFor(startBlock, range.endContainer, range.endOffset)
-        : elementTextLength(startBlock);
-      return { start: startPath, startOffset: startOffset, end: startPath, endOffset: endOffset };
+    if (endBlock) {
+      var endPath = endBlock === startBlock ? startPath : elementPathFromRoot(endBlock, root);
+      if (endPath) {
+        var endOffset = range.endContainer.nodeType === 3
+          ? elementOffsetFor(endBlock, range.endContainer, range.endOffset)
+          : elementTextLength(endBlock);
+        return { start: startPath, startOffset: startOffset, end: endPath, endOffset: endOffset };
+      }
     }
     return { start: startPath, startOffset: startOffset, end: startPath, endOffset: elementTextLength(startBlock) };
   }

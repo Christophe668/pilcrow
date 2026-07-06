@@ -101,8 +101,12 @@ end
 -- non-existent stable. Returns -1, 0, 1 like a Unix cmp.
 function M.compareVersions(a, b)
     local function parts(v)
+        -- Strip pre-release/build suffixes ("-rc1", "+build5") before
+        -- extracting digits — otherwise their numbers count as extra
+        -- version components and "0.2.0-rc1" sorts above "0.2.0".
+        local base = tostring(v or ""):gsub("[-+].*$", "")
         local out = {}
-        for n in tostring(v or ""):gmatch("(%d+)") do
+        for n in base:gmatch("(%d+)") do
             out[#out + 1] = tonumber(n)
         end
         return out
@@ -157,7 +161,10 @@ function M.applyUpdate(release, plugin_dir)
     if os.execute("mkdir -p " .. shell_quote(tmp_dir)) ~= 0 then
         return false, "mkdir_failed"
     end
-    local tmp_zip = tmp_dir .. "/" .. asset_name
+    -- The asset name comes from the release JSON — flatten any path
+    -- separators so a hostile/typoed `update_repo` can't write outside
+    -- the scratch dir.
+    local tmp_zip = tmp_dir .. "/" .. asset_name:gsub("[/\\]", "_")
 
     local ok, err = http_get(url, tmp_zip)
     if not ok then

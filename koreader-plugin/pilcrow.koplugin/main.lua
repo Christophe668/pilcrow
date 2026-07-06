@@ -170,11 +170,16 @@ end
 function Pilcrow:_ensureDir(dir)
     if not dir or dir == "" then return end
     if lfs.attributes(dir, "mode") == "directory" then return end
-    local parent = dir:match("^(.*)/[^/]+$")
-    if parent and lfs.attributes(parent, "mode") ~= "directory" then
-        lfs.mkdir(parent)
+    -- Create every missing level, not just the immediate parent — a
+    -- user-configured download dir can be arbitrarily deep.
+    local prefix = dir:sub(1, 1) == "/" and "/" or ""
+    local acc = prefix
+    for part in dir:gmatch("[^/]+") do
+        acc = acc == prefix and (prefix .. part) or (acc .. "/" .. part)
+        if lfs.attributes(acc, "mode") ~= "directory" then
+            lfs.mkdir(acc)
+        end
     end
-    lfs.mkdir(dir)
 end
 
 function Pilcrow:_ensureDownloadDir()
@@ -207,6 +212,38 @@ end
 
 function Pilcrow:_imagePathFor(id)
     return self.settings:imageDir() .. "/" .. image_filename_for(id)
+end
+
+local function safe_filename(id, title)
+    local cleaned = (title or "untitled"):gsub("[%c/\\:%*%?\"<>|]", " ")
+    cleaned = cleaned:gsub("%s+", " ")
+    if #cleaned > 100 then
+        cleaned = cleaned:sub(1, 100)
+        -- Byte-level cut can split a UTF-8 sequence; drop the partial
+        -- (or final complete) multi-byte char rather than keep junk bytes.
+        cleaned = cleaned:gsub("[\194-\244][\128-\191]*$", "")
+    end
+    -- Historical marker "[wr-id_<id>]" works for both Wallabag (numeric
+    -- id) and Readeck (alphanumeric id). `parse_id_from_path` matches
+    -- the same shape.
+    return string.format("[wr-id_%s] %s.epub", sanitize_id(id), cleaned)
+end
+
+--- True when the article's epub isn't on disk (never downloaded, or the
+--- file was removed behind our back).
+local function needs_download(article)
+    local path = article.local_path
+    return not (path and path ~= "" and lfs.attributes(path, "mode") == "file")
+end
+
+function Pilcrow:_downloadArticleTo(article)
+    local dir = self.settings:downloadDir()
+    self:_ensureDownloadDir()
+    local fpath = dir .. "/" .. safe_filename(article.id, article.title)
+    local ok, err_or_path, http_code = self.client:downloadEntry(article.id, fpath, "epub")
+    if not ok then return false, err_or_path, http_code end
+    self.cache:setLocalPath(article.id, fpath)
+    return true, fpath
 end
 
 function Pilcrow:_pruneImageFor(id)
@@ -333,6 +370,11 @@ function Pilcrow:openQueue()
     -- per-article memo so the next list / count call re-reads sidecars.
     if self.cache.invalidateProgress then self.cache:invalidateProgress() end
     if self._queue and self._queue.show_parent then
+        -- Recompute the list before painting: progress states, sync
+        -- results, and row actions may all have changed since the
+        -- widget was last on screen — without this, the invalidation
+        -- above never takes effect on re-show.
+        if self._queue.reload then self._queue:reload() end
         UIManager:show(self._queue)
         self:_maybeAutoSync()
         return
@@ -476,9 +518,11 @@ function Pilcrow:syncNow(refresh_cb, opts)
     local kickoff = function()
         -- Closure that owns the visible progress widget. Each call
         -- replaces the prior message in-place so the user sees coarse
-        -- phase changes without rapid eink redraws.
+        -- phase changes without rapid eink redraws. Quiet (auto) syncs
+        -- stay genuinely silent — no progress popups at all.
         local info
         local function set_progress(text)
+            if opts.quiet then return end
             if info then UIManager:close(info) end
             info = InfoMessage:new{ text = text }
             UIManager:show(info)
@@ -519,6 +563,32 @@ function Pilcrow:_doSync(done_cb, ctx)
     local full = (ctx.full ~= false)
     local per_page = self.settings:get("articles_per_sync") or 30
 
+    -- Push offline "mark as read" flags first: `_markFinished` records
+    -- `finished` locally when the device is offline (or the archive call
+    -- failed) and promises the user it syncs later — this is that later.
+    -- Doing it before the fetches also means the reconcile pass below
+    -- sees the server's post-archive state.
+    local pending_archive = {}
+    for _, key in ipairs(self.cache:listIds()) do
+        local a = self.cache:get(key)
+        if a and a.finished and not a.is_archived then
+            pending_archive[#pending_archive + 1] = a
+        end
+    end
+    if #pending_archive > 0 then
+        set_progress(T(_("%1: pushing read status… 0 / %2"), title, #pending_archive))
+        for i, a in ipairs(pending_archive) do
+            if self.client:archiveEntry(a.id) then
+                self.cache:setFlag(a.id, "is_archived", true)
+            end
+            if i == #pending_archive or i % 5 == 0 then
+                set_progress(T(_("%1: pushing read status… %2 / %3"),
+                               title, i, #pending_archive))
+            end
+        end
+        self.cache:save()
+    end
+
     set_progress(T(_("%1: fetching unread articles…"), title))
     local ok, items_or_err = self.client:listEntries({
         archive  = 0,
@@ -534,14 +604,33 @@ function Pilcrow:_doSync(done_cb, ctx)
         return
     end
 
+    -- `seen` keys are tostring(id) — the same keying the cache uses —
+    -- so the reconcile pass below can compare against `listIds`.
+    -- `new_articles` collects entries this device had never cached;
+    -- light syncs restrict the epub download phase to just those.
     local seen = {}
-    for _, api_article in ipairs(items_or_err) do
+    local unread_seen = {}
+    local new_articles = {}
+    local function ingest(api_article, seen_map)
+        local key = tostring(api_article.id)
+        if not self.cache:get(key) then
+            new_articles[#new_articles + 1] = key
+        end
         self.cache:upsertFromApi(api_article)
-        seen[api_article.id] = true
+        seen[key] = true
+        seen_map[key] = true
     end
+    for _, api_article in ipairs(items_or_err) do
+        ingest(api_article, unread_seen)
+    end
+    -- Fewer items than the cap means the fetch covered the complete
+    -- server-side unread list, so absences are meaningful.
+    local unread_complete = #items_or_err < per_page
 
     -- Also pull a page of starred articles so they appear in the Starred filter.
     set_progress(T(_("%1: fetching starred articles…"), title))
+    local starred_seen = {}
+    local starred_complete = false
     local s_ok, starred = self.client:listEntries({
         archive = 0, starred = 1, perPage = per_page, maxItems = per_page,
         on_progress = function(page, count)
@@ -551,8 +640,31 @@ function Pilcrow:_doSync(done_cb, ctx)
     })
     if s_ok then
         for _, api_article in ipairs(starred) do
-            self.cache:upsertFromApi(api_article)
-            seen[api_article.id] = true
+            ingest(api_article, starred_seen)
+        end
+        starred_complete = #starred < per_page
+    end
+
+    -- Reconcile state changed on other clients: when a fetch window was
+    -- complete, a cached article missing from it is no longer in that
+    -- state on the server (archived / deleted / unstarred elsewhere).
+    -- Without this, ghost rows sit in the Unread queue forever.
+    if unread_complete then
+        for _, key in ipairs(self.cache:listIds()) do
+            local a = self.cache:get(key)
+            if a and not a.is_archived and not unread_seen[key] then
+                self.cache:setFlag(a.id, "is_archived", true)
+            end
+        end
+    end
+    if starred_complete then
+        for _, key in ipairs(self.cache:listIds()) do
+            local a = self.cache:get(key)
+            -- The starred fetch only covers unarchived entries, so an
+            -- archived favourite's absence proves nothing — skip those.
+            if a and a.is_starred and not a.is_archived and not starred_seen[key] then
+                self.cache:setFlag(a.id, "is_starred", false)
+            end
         end
     end
 
@@ -611,6 +723,52 @@ function Pilcrow:_doSync(done_cb, ctx)
         end
     end
 
+    -- Download article epubs so everything in the queue is readable
+    -- offline — the whole point of syncing on an eink device. Full syncs
+    -- sweep every fetched article that's missing its file; light (auto)
+    -- syncs only fetch the articles that are new since the last sync, so
+    -- returning from background stays quick while new arrivals are still
+    -- made available offline. Best-effort: failures are counted and the
+    -- tap-to-open path remains as the fallback downloader.
+    local epubs_dl, epubs_failed = 0, 0
+    if self.settings:get("download_articles") then
+        local targets = {}
+        local candidates = full and seen or nil
+        if candidates then
+            for key in pairs(candidates) do
+                local article = self.cache:get(key)
+                if article and not article.is_archived and needs_download(article) then
+                    targets[#targets + 1] = article
+                end
+            end
+        else
+            for _, key in ipairs(new_articles) do
+                local article = self.cache:get(key)
+                if article and not article.is_archived and needs_download(article) then
+                    targets[#targets + 1] = article
+                end
+            end
+        end
+
+        local total_epubs = #targets
+        if total_epubs > 0 then
+            set_progress(T(_("%1: downloading articles… 0 / %2"), title, total_epubs))
+        end
+        for i, article in ipairs(targets) do
+            local dl_ok = self:_downloadArticleTo(article)
+            if dl_ok then
+                epubs_dl = epubs_dl + 1
+            else
+                epubs_failed = epubs_failed + 1
+            end
+            if i == total_epubs or i % 3 == 0 then
+                set_progress(T(_("%1: downloading articles… %2 / %3"),
+                               title, i, total_epubs))
+            end
+        end
+        if epubs_dl > 0 then self.cache:save() end
+    end
+
     -- Two-way annotation sync. Push first so any new local highlights
     -- exist on the server before we pull, then pull so the Highlights
     -- view reflects the freshest set including the ones we just sent.
@@ -628,6 +786,10 @@ function Pilcrow:_doSync(done_cb, ctx)
             push_counters = AnnotationSync.pushAll(self.cache, self.client, function(pushed)
                 set_progress(T(_("%1: pushing highlights… %2 pushed"), title, pushed))
             end)
+            -- Persist the pushed-markers immediately: if the pull tail
+            -- below is interrupted (crash, battery), losing them would
+            -- re-upload every highlight next sync.
+            self.cache:save()
         end
         if full and self.client.listAnnotations then
             set_progress(T(_("%1: pulling highlights…"), title))
@@ -644,6 +806,9 @@ function Pilcrow:_doSync(done_cb, ctx)
     local count = 0
     for _ in pairs(seen) do count = count + 1 end
     local msg = T(_("Sync complete: %1 articles refreshed."), count)
+    if epubs_dl + epubs_failed > 0 then
+        msg = msg .. " " .. T(_("(%1 articles downloaded, %2 failed)"), epubs_dl, epubs_failed)
+    end
     if images_dl + images_skipped > 0 then
         msg = msg .. " " .. T(_("(%1 images, %2 skipped)"), images_dl, images_skipped)
     end
@@ -688,9 +853,15 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
 
     local id = article.id
     if action == "toggle_archive" then
-        local ok = article.is_archived
-            and self.client:unarchiveEntry(id)
-            or  self.client:archiveEntry(id)
+        -- Explicit if/else: an `a and f() or g()` chain would fall through
+        -- to archiveEntry when unarchiveEntry fails, silently re-archiving
+        -- on the server while the cache flips to unread.
+        local ok
+        if article.is_archived then
+            ok = self.client:unarchiveEntry(id)
+        else
+            ok = self.client:archiveEntry(id)
+        end
         if ok then
             self.cache:setFlag(id, "is_archived", not article.is_archived)
             self.cache:save()
@@ -762,16 +933,6 @@ end
 -- Opening articles
 ------------------------------------------------------------------------
 
-local function safe_filename(id, title)
-    local cleaned = (title or "untitled"):gsub("[%c/\\:%*%?\"<>|]", " ")
-    cleaned = cleaned:gsub("%s+", " ")
-    if #cleaned > 100 then cleaned = cleaned:sub(1, 100) end
-    -- Historical marker "[wr-id_<id>]" works for both Wallabag (numeric
-    -- id) and Readeck (alphanumeric id). `parse_id_from_path` matches
-    -- the same shape.
-    return string.format("[wr-id_%s] %s.epub", sanitize_id(id), cleaned)
-end
-
 function Pilcrow:openArticle(article)
     local path = article.local_path
     local exists = path and lfs.attributes(path, "mode") == "file"
@@ -796,15 +957,11 @@ function Pilcrow:openArticle(article)
         return
     end
 
-    local dir = self.settings:downloadDir()
-    self:_ensureDownloadDir()
-    local fpath = dir .. "/" .. safe_filename(article.id, article.title)
-
     local info = InfoMessage:new{ text = _("Downloading article…") }
     UIManager:show(info)
     UIManager:forceRePaint()
 
-    local ok, err_or_path, http_code = self.client:downloadEntry(article.id, fpath, "epub")
+    local ok, err_or_path, http_code = self:_downloadArticleTo(article)
     UIManager:close(info)
     if not ok then
         UIManager:show(InfoMessage:new{
@@ -814,9 +971,8 @@ function Pilcrow:openArticle(article)
         return
     end
 
-    self.cache:setLocalPath(article.id, fpath)
     self.cache:save()
-    launch(fpath)
+    launch(err_or_path)
 end
 
 ------------------------------------------------------------------------

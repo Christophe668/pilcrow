@@ -62,7 +62,11 @@ export async function createAnnotation(
   db: DbDriver,
   payload: { article_id: number; quote: string; ranges_json: string; text: string | null },
 ): Promise<number> {
-  const id = nextTempId--;
+  // Seed below any temp row already persisted — the in-memory counter
+  // resets on restart and a collision here is a UNIQUE violation.
+  const minRow = await db.get<{ min: number | null }>("SELECT MIN(id) AS min FROM annotations");
+  const id = Math.min(nextTempId, Math.min(0, minRow?.min ?? 0) - 1);
+  nextTempId = id - 1;
   const now = new Date().toISOString();
   await db.run(
     `INSERT INTO annotations (id, article_id, quote, ranges_json, text, created_at, updated_at, pending_op)

@@ -66,7 +66,8 @@ describe("toggleArchivedAction", () => {
 });
 
 describe("deleteArticleAction", () => {
-  it("removes locally and enqueues deleteEntry", async () => {
+  it("removes locally and enqueues deleteEntry carrying the backend id", async () => {
+    await db.run("UPDATE articles SET backend_id = '9' WHERE id = 9");
     await deleteArticleAction(9);
     const a = await db.get("SELECT * FROM articles WHERE id = 9");
     expect(a).toBeNull();
@@ -74,6 +75,22 @@ describe("deleteArticleAction", () => {
       "SELECT op, payload_json FROM outbox LIMIT 1",
     );
     expect(job?.op).toBe("deleteEntry");
-    expect(JSON.parse(job!.payload_json)).toEqual({ id: 9 });
+    // The local row is gone by drain time, so the payload must carry the
+    // backend id along.
+    expect(JSON.parse(job!.payload_json)).toEqual({ id: 9, backendId: "9" });
+  });
+
+  it("cancels the queued create instead of enqueueing a delete for never-synced rows", async () => {
+    // Row 9 has no backend_id (offline save whose createEntry hasn't drained).
+    await db.run("INSERT INTO outbox (op, payload_json, created_at) VALUES (?, ?, ?)", [
+      "createEntry",
+      JSON.stringify({ tempId: 9, url: "https://x" }),
+      new Date().toISOString(),
+    ]);
+    await deleteArticleAction(9);
+    const a = await db.get("SELECT * FROM articles WHERE id = 9");
+    expect(a).toBeNull();
+    const jobs = await db.all<{ op: string }>("SELECT op FROM outbox");
+    expect(jobs).toEqual([]);
   });
 });

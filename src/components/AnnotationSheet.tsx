@@ -10,9 +10,11 @@ export type AnnotationSheetProps = {
     text: string | null;
   } | null;
   onClose: () => void;
+  /** Delete persisted; the host can unwrap the highlight in the reader. */
+  onDeleted?: (id: number) => void;
 };
 
-export function AnnotationSheet({ annotation, onClose }: AnnotationSheetProps) {
+export function AnnotationSheet({ annotation, onClose, onDeleted }: AnnotationSheetProps) {
   const [text, setText] = useState("");
   const update = useUpdateAnnotation();
   const del = useDeleteAnnotation();
@@ -35,6 +37,7 @@ export function AnnotationSheet({ annotation, onClose }: AnnotationSheetProps) {
 
   const onDelete = async () => {
     await del.mutateAsync(annotation.id);
+    onDeleted?.(annotation.id);
     onClose();
   };
 

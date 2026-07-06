@@ -26,7 +26,7 @@ const BATCH = 25;
 type Payloads = {
   createEntry: { tempId: number; url: string; tags?: string[] };
   updateEntry: { id: number; is_starred?: 0 | 1; is_archived?: 0 | 1; tags?: string };
-  deleteEntry: { id: number };
+  deleteEntry: { id: number; backendId?: string };
   addTag: { entryId: number; labels: string[] };
   removeTag: { entryId: number; tagId: number };
   createAnnotation: {
@@ -162,7 +162,10 @@ async function processOne(row: OutboxRow): Promise<void> {
     }
     case "deleteEntry": {
       const p = payload as Payloads["deleteEntry"];
-      const backendId = await lookupBackendId(db, "articles", p.id);
+      // The payload carries the backend id because the local row was
+      // deleted at enqueue time. Fall back to a lookup only for ops
+      // queued by older builds.
+      const backendId = p.backendId ?? (await lookupBackendId(db, "articles", p.id));
       await backend.deleteArticle(backendId);
       await deleteArticle(db, p.id);
       dataEvents.emit({ kind: "articles" });
@@ -230,7 +233,21 @@ async function processOne(row: OutboxRow): Promise<void> {
   }
 }
 
-export async function drainOutbox(): Promise<DrainSummary> {
+// Single-flight: pull-to-refresh and the AppState-resume handler can
+// both call drainOutbox at once; two concurrent drains would peek the
+// same due rows and apply creates twice (duplicate bookmarks/highlights).
+let drainInFlight: Promise<DrainSummary> | null = null;
+
+export function drainOutbox(): Promise<DrainSummary> {
+  if (!drainInFlight) {
+    drainInFlight = doDrainOutbox().finally(() => {
+      drainInFlight = null;
+    });
+  }
+  return drainInFlight;
+}
+
+async function doDrainOutbox(): Promise<DrainSummary> {
   const db = await getDb();
   const due = await peekDue(db, BATCH);
   let processed = 0;

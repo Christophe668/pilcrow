@@ -53,6 +53,9 @@ export default function ArticleRoute() {
 
   const readerRef = useRef<ReaderContentHandle | null>(null);
   const renderedAnnotationIds = useRef<Set<number>>(new Set());
+  // Bridge readiness gates annotation rendering: posting render-annotations
+  // before the injected script registers its message listener drops them.
+  const [readerReady, setReaderReady] = useState(false);
 
   useEffect(() => {
     if (article.data?.content == null) return;
@@ -87,23 +90,43 @@ export default function ArticleRoute() {
     });
   }, [built, articleId]);
 
-  // Push annotations into the reader on every change.
+  // Push annotations into the reader on every change (and on bridge ready).
   useEffect(() => {
-    if (!annotations.data || !readerRef.current) return;
+    if (!readerReady || !annotations.data || !readerRef.current) return;
+    // Reconcile before rendering: the outbox drain rewrites temp ids to
+    // server ids (and deletes drop rows), so a rendered id that no longer
+    // exists must be unwrapped — otherwise the re-render under the new id
+    // nests a second mark over the same text and the old mark's click id
+    // points at a dead annotation.
+    const liveIds = new Set(annotations.data.map((a) => a.id));
+    for (const staleId of renderedAnnotationIds.current) {
+      if (!liveIds.has(staleId)) {
+        readerRef.current.post({ kind: "unwrap-annotation", id: staleId });
+        renderedAnnotationIds.current.delete(staleId);
+      }
+    }
     const items: { id: number; ranges: SerializedRange }[] = [];
     for (const a of annotations.data) {
       if (renderedAnnotationIds.current.has(a.id)) continue;
-      const ranges = (JSON.parse(a.ranges_json) as SerializedRange[])[0];
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(a.ranges_json);
+      } catch {
+        continue; // corrupt row — skip it rather than lose every highlight
+      }
+      const ranges = Array.isArray(parsed) ? (parsed[0] as SerializedRange | undefined) : undefined;
       if (ranges) items.push({ id: a.id, ranges });
     }
     if (items.length === 0) return;
     readerRef.current.post({ kind: "render-annotations", items });
     items.forEach((it) => renderedAnnotationIds.current.add(it.id));
-  }, [annotations.data]);
+  }, [annotations.data, readerReady]);
 
-  // Reset rendered-set when article changes.
+  // Reset rendered-set (and readiness — the document reloads, so the bridge
+  // must announce itself again) when the article changes.
   useEffect(() => {
     renderedAnnotationIds.current.clear();
+    setReaderReady(false);
   }, [articleId, built?.document]);
 
   const initialScroll = article.data?.scroll_position ?? 0;
@@ -226,6 +249,7 @@ export default function ArticleRoute() {
             ref={readerRef}
             document={built.document}
             initialScroll={initialScroll}
+            onReady={() => setReaderReady(true)}
             onScroll={(p) => {
               void getDb().then((db) => setScrollPosition(db, articleId, p));
             }}
@@ -273,7 +297,16 @@ export default function ArticleRoute() {
         onClose={() => setOverflowItems(null)}
       />
       {showPrefs ? <ReaderPrefsSheet onClose={() => setShowPrefs(false)} /> : null}
-      <AnnotationSheet annotation={openAnnotation} onClose={() => setOpenAnnotation(null)} />
+      <AnnotationSheet
+        annotation={openAnnotation}
+        onClose={() => setOpenAnnotation(null)}
+        onDeleted={(annoId) => {
+          // Remove the mark immediately; the annotations query refetch also
+          // reconciles, but that round-trip would leave a stale highlight up.
+          readerRef.current?.post({ kind: "unwrap-annotation", id: annoId });
+          renderedAnnotationIds.current.delete(annoId);
+        }}
+      />
     </View>
   );
 }

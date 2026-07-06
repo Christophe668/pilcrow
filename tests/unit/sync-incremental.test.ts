@@ -67,6 +67,9 @@ const entry = (id: number, updated: string) => ({
 describe("runIncrementalSync", () => {
   it("forwards stored since timestamp and updates it", async () => {
     await setSyncValue(db, "last_since", "1700000000");
+    // A stale sweep timestamp would trigger a full re-listing (no since
+    // param) through the same handler; keep this test about forwarding.
+    await setSyncValue(db, "last_delete_sweep_at", new Date().toISOString());
     let capturedSince: string | null = null;
     server.use(
       http.get("https://wb.test/api/entries.json", ({ request }) => {
@@ -97,13 +100,15 @@ describe("runIncrementalSync", () => {
       [50, "50", "https://x/50", "Old", "<p>body</p>"],
     );
     server.use(
+      // The article must exist server-side: the delete sweep re-lists the
+      // library and would otherwise prune row 50 before the pull runs.
       http.get("https://wb.test/api/entries.json", () =>
         HttpResponse.json({
           page: 1,
-          pages: 0,
+          pages: 1,
           limit: 100,
-          total: 0,
-          _embedded: { items: [] },
+          total: 1,
+          _embedded: { items: [entry(50, "2026-05-10T00:00:00Z")] },
         }),
       ),
       http.get("https://wb.test/api/tags.json", () => HttpResponse.json([])),

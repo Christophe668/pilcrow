@@ -10,6 +10,7 @@ import {
   pollBookmarkLoaded,
 } from "@/api/readeck/bookmarks";
 import { listLabels } from "@/api/readeck/labels";
+import { syncList } from "@/api/readeck/sync";
 import {
   listAnnotations,
   createAnnotation,
@@ -120,6 +121,12 @@ export const ReadeckBackend: Backend = {
       totalPages,
       total,
     };
+  },
+
+  async listChanges(args) {
+    const auth = await getAuth();
+    const entries = await syncList(auth, args);
+    return entries.map((e) => ({ id: e.id, time: e.time, type: e.type }));
   },
 
   async getArticle(id) {

@@ -18,11 +18,21 @@ H.eq("empty input", Summarizer.html_to_text(nil), "")
 H.check("paragraphs separated by newlines",
     Summarizer.html_to_text("<p>One.</p><p>Two.</p>") == "One.\nTwo.",
     Summarizer.html_to_text("<p>One.</p><p>Two.</p>"))
+H.eq("drops html comments",
+    Summarizer.html_to_text("<p>A</p><!-- a <b>comment</b> --><p>B</p>"),
+    "A\nB")
 
 -- truncate
 H.eq("short text untouched", Summarizer.truncate("hello"), "hello")
 local long = string.rep("a", Summarizer.MAX_CHARS + 500)
 H.eq("long text cut to budget", #Summarizer.truncate(long), Summarizer.MAX_CHARS)
+-- truncate must not split a multi-byte UTF-8 character
+local multi = string.rep("é", Summarizer.MAX_CHARS)  -- 2 bytes each
+local cut_multi = Summarizer.truncate(multi)
+H.check("truncate <= budget", #cut_multi <= Summarizer.MAX_CHARS)
+local last = cut_multi:byte(#cut_multi)
+H.check("truncate ends on complete char", last < 0x80 or last > 0xBF,
+    string.format("last byte 0x%02X", last))
 
 -- build_prompt
 local prompt = Summarizer.build_prompt(

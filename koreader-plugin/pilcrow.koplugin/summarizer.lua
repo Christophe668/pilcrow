@@ -41,6 +41,7 @@ function Summarizer.html_to_text(html)
     local s = html
     s = s:gsub("<[sS][cC][rR][iI][pP][tT].-</[sS][cC][rR][iI][pP][tT]>", " ")
     s = s:gsub("<[sS][tT][yY][lL][eE].-</[sS][tT][yY][lL][eE]>", " ")
+    s = s:gsub("<!%-%-.-%-%->", " ")
     -- Block-level closers become newlines so paragraphs stay separated.
     s = s:gsub("<[bB][rR]%s*/?>", "\n")
     s = s:gsub("</[pP]>", "\n")
@@ -59,7 +60,15 @@ end
 
 function Summarizer.truncate(text)
     if #text <= Summarizer.MAX_CHARS then return text end
-    return text:sub(1, Summarizer.MAX_CHARS)
+    local cut = Summarizer.MAX_CHARS
+    -- Don't split a multi-byte UTF-8 sequence: back up past any
+    -- continuation bytes (0x80-0xBF) at the cut boundary.
+    while cut > 1 do
+        local b = text:byte(cut)
+        if not b or b < 0x80 or b > 0xBF then break end
+        cut = cut - 1
+    end
+    return text:sub(1, cut)
 end
 
 function Summarizer.build_prompt(article, text)

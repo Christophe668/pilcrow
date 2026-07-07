@@ -1,7 +1,10 @@
 name: Publish koplugin
 on:
   push:
-    tags: ["koplugin-v*"]
+    # "koplugin.v*" (no hyphen) is the current scheme: the updater
+    # shipped through 2026.07.1 cuts tag names at the first hyphen when
+    # parsing versions, so "koplugin-v*" tags are invisible to it.
+    tags: ["koplugin-v*", "koplugin.v*"]
   workflow_dispatch:
     inputs:
       version:
@@ -22,6 +25,7 @@ jobs:
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             v="${GITHUB_REF_NAME#koplugin-v}"
+            v="${v#koplugin.v}"
           elif [ -n "${{ inputs.version }}" ]; then
             v="${{ inputs.version }}"
           else

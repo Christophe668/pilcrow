@@ -7,6 +7,13 @@ than its own roadmap.
 
 ## [Unreleased]
 
+### Added
+
+- Optional LLM article summaries: **Summary** in the queue long-press menu
+  and **Summarize article** in the reader action sheet. Anthropic or any
+  OpenAI-compatible endpoint; configured under Settings → Summaries.
+  Summaries are cached per article and survive syncs.
+
 ## [2026.07.0] - 2026-07-06
 
 ### Added

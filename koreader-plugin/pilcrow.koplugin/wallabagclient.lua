@@ -310,6 +310,17 @@ function Client:downloadUrl(url, file_path)
     return self:_request("GET", url, nil, nil, file_path)
 end
 
+--- Fetch a single entry's server-rendered `content` HTML. Used by the
+--  summarizer when the EPUB hasn't been downloaded (or won't parse).
+function Client:getEntryContent(id)
+    local ok, data = with_auth(self, function()
+        return self:_request("GET", string.format("/api/entries/%d.json", id))
+    end)
+    if not ok then return false, data end
+    if type(data) ~= "table" then return false, "json_error" end
+    return true, data.content or ""
+end
+
 --- Tell the server to re-fetch the article from its source URL.
 --  Useful when Wallabag's first fetch failed (the EPUB contains
 --  "wallabag can't retrieve contents for this article") — sometimes

@@ -201,6 +201,8 @@ function Client:_request(method, url_or_path, body, extra_headers, file_path, op
     if file_path then return true, file_path end
 
     local content = table.concat(sink)
+    if opts.raw then return true, content, resp_headers end
+
     if opts.return_headers then
         if content == "" then return true, {}, resp_headers end
         local ok, decoded = pcall(JSON.decode, content)
@@ -408,6 +410,15 @@ end
 function Client:downloadUrl(url, file_path)
     if not url or url == "" then return false, "empty_url" end
     return self:_request("GET", url, nil, nil, file_path)
+end
+
+--- Fetch the bookmark's processed article HTML. Readeck serves it as
+--  raw text/html, hence the `raw` request option.
+function Client:getEntryContent(id)
+    return with_auth(self, function()
+        return self:_request("GET", bookmark_path(id) .. "/article", nil, nil, nil,
+            { raw = true, accept = "text/html" })
+    end)
 end
 
 --- Readeck has no equivalent of Wallabag's `/reload` endpoint — the

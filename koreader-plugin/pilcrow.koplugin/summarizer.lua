@@ -81,4 +81,75 @@ function Summarizer.build_prompt(article, text)
     }
 end
 
+--- Build a provider-specific request. `body` stays a Lua table; the
+--  HTTP layer JSON-encodes it. Returns nil + error code when the
+--  config is incomplete.
+function Summarizer.build_request(cfg, prompt)
+    if not cfg.api_key or cfg.api_key == "" then return nil, "no_key" end
+    if cfg.provider == "anthropic" then
+        return {
+            url = Summarizer.ANTHROPIC_URL,
+            headers = {
+                ["x-api-key"] = cfg.api_key,
+                ["anthropic-version"] = "2023-06-01",
+                ["Content-Type"] = "application/json",
+            },
+            body = {
+                model = cfg.model,
+                max_tokens = 1024,
+                system = prompt.system,
+                messages = { { role = "user", content = prompt.user } },
+            },
+        }
+    elseif cfg.provider == "openai" then
+        local base = (cfg.base_url or ""):gsub("/+$", "")
+        if base == "" then return nil, "no_base_url" end
+        return {
+            url = base .. "/chat/completions",
+            headers = {
+                ["Authorization"] = "Bearer " .. cfg.api_key,
+                ["Content-Type"] = "application/json",
+            },
+            body = {
+                model = cfg.model,
+                max_tokens = 1024,
+                messages = {
+                    { role = "system", content = prompt.system },
+                    { role = "user", content = prompt.user },
+                },
+            },
+        }
+    end
+    return nil, "unknown_provider"
+end
+
+local function trim(s)
+    return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+--- Extract the summary text from a decoded provider response. Both
+--  APIs return JSON error bodies on non-2xx, so error extraction
+--  lives here too.
+function Summarizer.parse_response(provider, decoded)
+    if type(decoded) ~= "table" then return nil, "bad_response" end
+    if decoded.error and decoded.error.message then
+        return nil, tostring(decoded.error.message)
+    end
+    if provider == "anthropic" then
+        local blocks = decoded.content or {}
+        for i = 1, #blocks do
+            local b = blocks[i]
+            if b.type == "text" and b.text and b.text ~= "" then
+                return trim(b.text)
+            end
+        end
+        return nil, "empty_response"
+    end
+    -- openai-compatible
+    local choice = decoded.choices and decoded.choices[1]
+    local content = choice and choice.message and choice.message.content
+    if content and content ~= "" then return trim(content) end
+    return nil, "empty_response"
+end
+
 return Summarizer

@@ -613,12 +613,19 @@ function Pilcrow:_doSync(done_cb, ctx)
     local seen = {}
     local unread_seen = {}
     local new_articles = {}
+    -- Wallabag entries arrive with their annotations embedded; the
+    -- cache upsert drops them, so stash them aside for the annotation
+    -- pull below — every entry covered here is one round-trip saved.
+    local embedded_annotations = {}
     local function ingest(api_article, seen_map)
         local key = tostring(api_article.id)
         if not self.cache:get(key) then
             new_articles[#new_articles + 1] = key
         end
         self.cache:upsertFromApi(api_article)
+        if type(api_article.annotations) == "table" then
+            embedded_annotations[key] = api_article.annotations
+        end
         seen[key] = true
         seen_map[key] = true
     end
@@ -798,7 +805,7 @@ function Pilcrow:_doSync(done_cb, ctx)
             pull_counters = AnnotationSync.pullAll(self.cache, self.client, function(done, total, _fetched)
                 set_progress(T(_("%1: pulling highlights… %2 / %3"),
                                title, done, total))
-            end)
+            end, { embedded = embedded_annotations })
         end
     end
 

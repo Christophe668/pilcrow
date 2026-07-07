@@ -95,4 +95,52 @@ H.check("openai error surfaced", s5 == nil and e5 == "model not found", e5)
 local s6, e6 = Summarizer.parse_response("openai", { choices = {} })
 H.check("openai empty choices is error", s6 == nil and e6 ~= nil, e6)
 
+-- _collect_html: recursive + sorted, ignores non-html
+local fake_fs = {
+    ["/e"] = { "b.html", "sub", "cover.jpg" },
+    ["/e/sub"] = { "a.xhtml", "notes.txt" },
+}
+local stub_lfs = {
+    dir = function(d)
+        local i, list = 0, fake_fs[d] or {}
+        return function() i = i + 1; return list[i] end
+    end,
+    attributes = function(path, _what)
+        return fake_fs[path] and "directory" or "file"
+    end,
+}
+local files = Summarizer._collect_html("/e", stub_lfs)
+H.eq("collect count", #files, 2)
+H.eq("collect sorted 1", files[1], "/e/b.html")
+H.eq("collect sorted 2", files[2], "/e/sub/a.xhtml")
+
+-- get_article_text: server fallback when no local EPUB
+local fake_backend = {}
+function fake_backend:getEntryContent(id)
+    return true, "<h1>T</h1><p>Hello <b>world</b>!</p>"
+end
+local text = Summarizer.get_article_text({ id = 7 }, fake_backend,
+    { lfs = { attributes = function() return nil end } })
+H.eq("server fallback text", text, "T\nHello world!")
+
+-- get_article_text: server fetch failure surfaces error
+local bad_backend = {}
+function bad_backend:getEntryContent(id) return false, "http_error" end
+local no_text, gerr = Summarizer.get_article_text({ id = 7 }, bad_backend,
+    { lfs = { attributes = function() return nil end } })
+H.check("server failure surfaces", no_text == nil and gerr == "http_error", gerr)
+
+-- extract_epub_text: unzip failure cleaned up and reported
+local calls = {}
+local etext, eerr = Summarizer.extract_epub_text("/x.epub", {
+    lfs = stub_lfs,
+    tmp_dir = "/tmp/pilcrow-test-sum",
+    execute = function(cmd)
+        calls[#calls + 1] = cmd
+        if cmd:find("unzip", 1, true) then return 1 end  -- fail
+        return 0
+    end,
+})
+H.check("unzip failure reported", etext == nil and eerr == "unzip_failed", eerr)
+
 H.finish()

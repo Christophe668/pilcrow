@@ -152,4 +152,128 @@ function Summarizer.parse_response(provider, decoded)
     return nil, "empty_response"
 end
 
+------------------------------------------------------------------------
+-- Article text acquisition
+--
+-- Prefer the locally downloaded EPUB (it's just zipped HTML — same
+-- `unzip` dependency selfupdate.lua already relies on); fall back to
+-- fetching the entry content from the backend. Wifi is required for
+-- the LLM call anyway, so the fallback costs nothing extra.
+------------------------------------------------------------------------
+
+local function shell_quote(s)
+    return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
+end
+
+function Summarizer._collect_html(dir, lfs)
+    local files = {}
+    local function walk(d)
+        for entry in lfs.dir(d) do
+            if entry ~= "." and entry ~= ".." then
+                local path = d .. "/" .. entry
+                if lfs.attributes(path, "mode") == "directory" then
+                    walk(path)
+                elseif entry:lower():match("%.x?html?$") then
+                    files[#files + 1] = path
+                end
+            end
+        end
+    end
+    walk(dir)
+    table.sort(files)
+    return files
+end
+
+--- Unzip the EPUB into deps.tmp_dir, concatenate its HTML files
+--  (sorted by path — close enough to spine order for a summary), and
+--  strip to plain text. deps = { lfs, execute, tmp_dir }.
+function Summarizer.extract_epub_text(epub_path, deps)
+    local tmp = deps.tmp_dir
+    deps.execute("rm -rf " .. shell_quote(tmp))
+    if deps.execute("mkdir -p " .. shell_quote(tmp)) ~= 0 then
+        return nil, "mkdir_failed"
+    end
+    local unzip_cmd = string.format("unzip -q -o %s -d %s",
+        shell_quote(epub_path), shell_quote(tmp))
+    if deps.execute(unzip_cmd) ~= 0 then
+        deps.execute("rm -rf " .. shell_quote(tmp))
+        return nil, "unzip_failed"
+    end
+    local parts = {}
+    local html_files = Summarizer._collect_html(tmp, deps.lfs)
+    for i = 1, #html_files do
+        local fh = io.open(html_files[i], "r")
+        if fh then
+            parts[#parts + 1] = fh:read("*a")
+            fh:close()
+        end
+    end
+    deps.execute("rm -rf " .. shell_quote(tmp))
+    if #parts == 0 then return nil, "no_html_in_epub" end
+    return Summarizer.html_to_text(table.concat(parts, "\n"))
+end
+
+function Summarizer.get_article_text(article, backend, deps)
+    if article.local_path
+       and deps.lfs.attributes(article.local_path, "mode") == "file" then
+        local text = Summarizer.extract_epub_text(article.local_path, deps)
+        if text and text ~= "" then return text end
+        logger.warn("pilcrow/summary: EPUB extraction failed, falling back to server")
+    end
+    if not backend then return nil, "no_backend" end
+    local ok, html = backend:getEntryContent(article.id)
+    if not ok then return nil, tostring(html) end
+    local text = Summarizer.html_to_text(html or "")
+    if text == "" then return nil, "empty_article" end
+    return text
+end
+
+------------------------------------------------------------------------
+-- HTTP + entry point
+------------------------------------------------------------------------
+
+function Summarizer._http_post(url, headers, body_string)
+    headers["Content-Length"] = tostring(#body_string)
+    local sink = {}
+    socketutil:set_timeout(15, 120)
+    logger.dbg("pilcrow/summary: POST", url)
+    local code = socket.skip(1, http.request{
+        method = "POST",
+        url = url,
+        headers = headers,
+        source = ltn12.source.string(body_string),
+        sink = ltn12.sink.table(sink),
+    })
+    socketutil:reset_timeout()
+    if type(code) ~= "number" then
+        -- luasocket returns a string error (DNS, TLS, refused…) here.
+        return false, tostring(code or "network_error")
+    end
+    local content = table.concat(sink)
+    local ok, decoded = pcall(JSON.decode, content)
+    if not ok or decoded == nil then
+        -- Both providers send JSON error bodies; a non-JSON body means
+        -- something upstream (proxy, gateway) answered instead.
+        return false, "HTTP " .. tostring(code)
+    end
+    return true, decoded
+end
+
+--- Entry point: fetch text, call the configured provider, return the
+--  summary. Blocking — main.lua shows an InfoMessage around it (same
+--  pattern as the refetch action).
+--  @return true, summary  or  false, error_message
+function Summarizer.summarize(article, backend, cfg, deps)
+    local text, terr = Summarizer.get_article_text(article, backend, deps)
+    if not text then return false, terr or "no_text" end
+    local prompt = Summarizer.build_prompt(article, Summarizer.truncate(text))
+    local req, rerr = Summarizer.build_request(cfg, prompt)
+    if not req then return false, rerr end
+    local ok, decoded = Summarizer._http_post(req.url, req.headers, JSON.encode(req.body))
+    if not ok then return false, decoded end
+    local summary, perr = Summarizer.parse_response(cfg.provider, decoded)
+    if not summary then return false, perr end
+    return true, summary
+end
+
 return Summarizer

@@ -101,10 +101,14 @@ end
 -- non-existent stable. Returns -1, 0, 1 like a Unix cmp.
 function M.compareVersions(a, b)
     local function parts(v)
-        -- Strip pre-release/build suffixes ("-rc1", "+build5") before
-        -- extracting digits — otherwise their numbers count as extra
-        -- version components and "0.2.0-rc1" sorts above "0.2.0".
-        local base = tostring(v or ""):gsub("[-+].*$", "")
+        -- Drop any non-numeric tag prefix ("koplugin-v2026.07.1") before
+        -- stripping pre-release/build suffixes ("-rc1", "+build5") —
+        -- otherwise a hyphen in the prefix swallows the whole version
+        -- and every release compares as 0.0.0. The suffix strip itself
+        -- matters because "0.2.0-rc1"'s digits would otherwise count as
+        -- extra version components and sort above "0.2.0".
+        local base = tostring(v or ""):match("%d.*") or ""
+        base = base:gsub("[-+].*$", "")
         local out = {}
         for n in base:gmatch("(%d+)") do
             out[#out + 1] = tonumber(n)

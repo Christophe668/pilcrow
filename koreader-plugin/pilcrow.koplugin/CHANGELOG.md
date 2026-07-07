@@ -7,6 +7,21 @@ than its own roadmap.
 
 ## [Unreleased]
 
+## [2026.07.2] - 2026-07-07
+
+### Fixed
+
+- **"Check for updates" never found new releases.** The version
+  comparator cut the release tag at its first hyphen, so the
+  `koplugin-v…` tag prefix made every release parse as `0.0.0` and the
+  installed version always won. The comparator now skips any
+  non-numeric prefix. Release tags also switch to a hyphen-free scheme
+  (`koplugin.v…`) that the *old* comparator reads correctly, so
+  installs from 2026.07.1 and earlier can pick up this release — and
+  future ones — through the built-in updater.
+
+## [2026.07.1] - 2026-07-07
+
 ### Added
 
 - Optional LLM article summaries: **Summary** in the queue long-press menu

@@ -9,6 +9,15 @@ than its own roadmap.
 
 ## [2026.07.2] - 2026-07-07
 
+### Changed
+
+- Syncs no longer re-fetch highlights article-by-article across the
+  whole queue. Wallabag annotations now come embedded in the entry
+  fetch itself (zero extra requests); Readeck syncs make one global
+  annotation-listing call and only re-fetch articles whose highlight
+  set actually changed. The old per-article sweep remains as a
+  fallback when neither shortcut is available.
+
 ### Fixed
 
 - **"Check for updates" never found new releases.** The version

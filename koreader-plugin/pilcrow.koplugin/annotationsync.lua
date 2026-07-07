@@ -17,12 +17,15 @@ the configured read-it-later server (Wallabag or Readeck):
         quoted text + note into Readeck's `note` field. The annotation
         exists with full content; only the visual anchor is lossy.
 
-  * **Pull.** During the same sync, annotations are fetched from the
-    server for every cached article and stashed under
-    `article.server_annotations`. The Highlights view in the plugin
-    reads from there. We don't render them on the article body — the
-    user has KOReader's own highlight UI for that — but they're listed
-    so the user can review what they've highlighted across devices.
+  * **Pull.** During the same sync, server annotations are refreshed
+    into `article.server_annotations`, which the Highlights view reads.
+    The refresh avoids per-article round-trips where it can — Wallabag
+    embeds annotations in the entry fetch itself, Readeck exposes a
+    global annotation listing used to skip unchanged articles (see
+    `pullAll`) — and falls back to one request per article otherwise.
+    We don't render them on the article body — the user has KOReader's
+    own highlight UI for that — but they're listed so the user can
+    review what they've highlighted across devices.
 
 Per-article tracking:
 
@@ -242,23 +245,56 @@ end
 -- Pull pass
 ------------------------------------------------------------------------
 
--- Fetch annotations for cached articles the user actually has on
--- device (downloaded locally, or already known to carry server
--- annotations) and stash them on the cache entry under
--- `server_annotations`. Cold cache rows are skipped so the pull
--- doesn't grind through every article that was ever listed.
+-- Sorted id-set signature of an annotation list. Two lists with the
+-- same annotation ids compare equal regardless of order, so this
+-- decides whether a bookmark's server-side set differs from what the
+-- cache already holds. Blind spot: an edit that keeps the id (e.g. a
+-- note reworded on the server) is invisible until the set changes.
+local function ids_signature(list)
+    local ids = {}
+    for _, a in ipairs(list or {}) do
+        ids[#ids + 1] = tostring(a.id or "")
+    end
+    table.sort(ids)
+    return table.concat(ids, "\n")
+end
+
+-- Refresh `server_annotations` on cached articles the user actually
+-- has on device (downloaded locally, or already known to carry server
+-- annotations). Cold cache rows are skipped so the pull doesn't grind
+-- through every article that was ever listed.
+--
+-- The naive shape of this pass is one `listAnnotations` round-trip per
+-- article, every sync — which, now that syncs download every EPUB,
+-- means the whole queue. Two short-circuits keep that as the fallback
+-- rather than the norm:
+--
+--   1. `opts.embedded` — Wallabag serializes each entry's annotations
+--      into the `/api/entries` response the sync just fetched. The
+--      caller passes those through (`id → raw annotation list`) and
+--      covered articles cost zero extra requests.
+--   2. `client:listAllAnnotations()` — Readeck lists every annotation
+--      in one paginated call. Articles whose id-set matches the cache
+--      are skipped, sets that vanished are cleared locally, and only
+--      genuinely changed articles pay the per-article round-trip (the
+--      summaries lack note/selector detail, so a change still needs
+--      the full fetch).
+--
 -- Errors per article are logged and the sweep continues; existing
 -- data on the entry is preserved when a fetch fails so a transient
--- hiccup doesn't blank the Highlights view.
+-- hiccup doesn't blank the Highlights view. If the global listing
+-- fails (older Readeck, network blip), the full per-article sweep
+-- runs as before.
 --
--- `on_step(done, total, fetched)` is invoked after each article;
--- `total` is the count of selected targets, not the full cache size.
+-- `on_step(done, total, fetched)` is invoked after each per-article
+-- fetch; `total` counts only the articles that actually need one.
 --
 -- Returns `{ fetched, articles, failed }` where `fetched` is the total
 -- annotation count across all articles, `articles` is the number of
--- articles successfully queried, and `failed` is the number of articles
--- whose fetch errored.
-function M.pullAll(cache, client, on_step)
+-- articles successfully refreshed (including short-circuited ones),
+-- and `failed` is the number of articles whose fetch errored.
+function M.pullAll(cache, client, on_step, opts)
+    opts = opts or {}
     local counters = { fetched = 0, articles = 0, failed = 0 }
     if not client or type(client.listAnnotations) ~= "function" then
         return counters
@@ -291,8 +327,61 @@ function M.pullAll(cache, client, on_step)
         end
     end
 
-    local total = #targets
-    for i, id in ipairs(targets) do
+    -- Short-circuit 1: annotations embedded in this sync's entry fetch.
+    local embedded = opts.embedded or {}
+    local remaining = {}
+    for _, id in ipairs(targets) do
+        local raw = embedded[id]
+        if type(raw) == "table" then
+            local normalized = {}
+            for _, a in ipairs(raw) do
+                normalized[#normalized + 1] = normalize(a)
+            end
+            cache:setFlag(id, "server_annotations", normalized)
+            counters.articles = counters.articles + 1
+            counters.fetched = counters.fetched + #normalized
+        else
+            remaining[#remaining + 1] = id
+        end
+    end
+
+    -- Short-circuit 2: one global summary call decides who changed.
+    if #remaining > 0 and type(client.listAllAnnotations) == "function" then
+        local ok, summaries = client:listAllAnnotations()
+        if ok and type(summaries) == "table" then
+            local by_bookmark = {}
+            for _, s in ipairs(summaries) do
+                local bid = tostring(s.bookmark_id or "")
+                local list = by_bookmark[bid]
+                if not list then list = {}; by_bookmark[bid] = list end
+                list[#list + 1] = s
+            end
+            local changed = {}
+            for _, id in ipairs(remaining) do
+                local article = cache:get(id)
+                local cached = (article and article.server_annotations) or {}
+                local server = by_bookmark[tostring(id)]
+                if not server then
+                    if #cached > 0 then
+                        cache:setFlag(id, "server_annotations", {})
+                    end
+                    counters.articles = counters.articles + 1
+                elseif ids_signature(server) == ids_signature(cached) then
+                    counters.articles = counters.articles + 1
+                    counters.fetched = counters.fetched + #cached
+                else
+                    changed[#changed + 1] = id
+                end
+            end
+            remaining = changed
+        else
+            logger.warn("pilcrow/annotationsync: global annotation list failed,",
+                        "falling back to per-article pull:", summaries)
+        end
+    end
+
+    local total = #remaining
+    for i, id in ipairs(remaining) do
         local ok, list_or_err = client:listAnnotations(id)
         if not ok then
             counters.failed = counters.failed + 1

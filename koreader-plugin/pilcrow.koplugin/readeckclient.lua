@@ -464,6 +464,48 @@ function Client:listAnnotations(bookmark_id)
     end)
 end
 
+--- List every annotation across all bookmarks in one paginated sweep
+--  of `GET /api/bookmarks/annotations`. Returns `(true, list)` where
+--  list items are annotation summaries:
+--    { id, text, created, bookmark_id, bookmark_title, ... }
+--  Note the summaries carry no selectors/notes — they identify *which*
+--  bookmarks have annotations; fetch per-bookmark for full detail.
+function Client:listAllAnnotations(opts)
+    opts = opts or {}
+    local per_page = math.min(opts.perPage or 100, 100)  -- server caps at 100
+    local max_items = opts.maxItems or 2000
+
+    local results = {}
+    local offset = 0
+    while true do
+        local path = string.format("/api/bookmarks/annotations?limit=%d&offset=%d",
+                                   per_page, offset)
+        local ok, data, resp_headers = with_auth(self, function()
+            return self:_request("GET", path, nil, nil, nil, { return_headers = true })
+        end)
+        if not ok then return false, data end
+        if type(data) ~= "table" then return false, "json_error" end
+
+        local count = 0
+        for _, a in ipairs(data) do
+            results[#results + 1] = a
+            count = count + 1
+        end
+
+        if count == 0 then break end
+        offset = offset + count
+
+        -- Same stop conditions as listEntries: honour Total-Count when
+        -- present, otherwise stop on a short page.
+        local total = resp_headers and (resp_headers["total-count"] or resp_headers["Total-Count"])
+        total = tonumber(total)
+        if total and offset >= total then break end
+        if count < per_page then break end
+        if #results >= max_items then break end
+    end
+    return true, results
+end
+
 Client.supports_reload = false
 
 return Client

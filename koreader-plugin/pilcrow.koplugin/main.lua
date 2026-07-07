@@ -17,6 +17,7 @@ local DocSettings = require("docsettings")
 local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
 local NetworkMgr = require("ui/network/manager")
+local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local lfs = require("libs/libkoreader-lfs")
@@ -30,6 +31,7 @@ local BackendClient = require("backendclient")
 local Cache = require("articlecache")
 local QueueView = require("queueview")
 local SettingsView = require("settingsview")
+local Summarizer = require("summarizer")
 
 ------------------------------------------------------------------------
 -- Menu-order injection
@@ -844,6 +846,11 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
         return
     end
 
+    if action == "summary" then
+        self:showSummary(article)
+        return
+    end
+
     if not NetworkMgr:isOnline() then
         UIManager:show(InfoMessage:new{
             text = _("This action needs network connectivity."), timeout = 2,
@@ -927,6 +934,76 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
         })
         if refresh_cb then refresh_cb() end
     end
+end
+
+------------------------------------------------------------------------
+-- Article summaries (LLM-generated, cached on the article entry)
+------------------------------------------------------------------------
+
+function Pilcrow:showSummary(article)
+    if article.summary and article.summary ~= "" then
+        self:_showSummaryDialog(article)
+        return
+    end
+    self:_generateSummary(article)
+end
+
+function Pilcrow:_generateSummary(article)
+    local cfg = self.settings:summaryConfig()
+    if not cfg.api_key or cfg.api_key == "" then
+        UIManager:show(InfoMessage:new{
+            text = _("Set an API key first (Settings → Summaries)."),
+            timeout = 3,
+        })
+        return
+    end
+    -- Same flow the sync path uses (main.lua ~line 555): if wifi is off,
+    -- KOReader prompts to enable it and re-runs this function once online.
+    if NetworkMgr:willRerunWhenOnline(function() self:_generateSummary(article) end) then
+        return
+    end
+
+    local info = InfoMessage:new{ text = _("Summarizing…") }
+    UIManager:show(info)
+    UIManager:forceRePaint()
+    local ok, result = Summarizer.summarize(article, self.client, cfg, {
+        lfs = lfs,
+        execute = os.execute,
+        tmp_dir = DataStorage:getDataDir() .. "/pilcrow/summary-tmp",
+    })
+    UIManager:close(info)
+
+    if not ok then
+        UIManager:show(InfoMessage:new{
+            text = T(_("Summary failed: %1"), tostring(result)),
+        })
+        return
+    end
+
+    self.cache:setFlag(article.id, "summary", result)
+    self.cache:setFlag(article.id, "summary_model", cfg.model)
+    self.cache:save()
+    self:_showSummaryDialog(self.cache:get(article.id) or article)
+end
+
+function Pilcrow:_showSummaryDialog(article)
+    local viewer
+    local footer = (article.summary_model and article.summary_model ~= "")
+        and ("\n\n— " .. article.summary_model) or ""
+    viewer = TextViewer:new{
+        title = article.title or _("Summary"),
+        text = (article.summary or "") .. footer,
+        buttons_table = {{
+            { text = _("Close"),
+              callback = function() UIManager:close(viewer) end },
+            { text = _("Regenerate"),
+              callback = function()
+                  UIManager:close(viewer)
+                  self:_generateSummary(article)
+              end },
+        }},
+    }
+    UIManager:show(viewer)
 end
 
 ------------------------------------------------------------------------
@@ -1063,6 +1140,14 @@ function Pilcrow:_showReaderActionSheet(reader_menu, ges)
                self:handleRowAction("copy_url", article)
            end }},
     }
+
+    buttons[#buttons + 1] = {{
+        text = _("Summarize article"),
+        callback = function()
+            UIManager:close(dialog)
+            self:showSummary(article)
+        end,
+    }}
 
     if self:_articleHasProgress(article) then
         buttons[#buttons + 1] = {{

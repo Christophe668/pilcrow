@@ -519,6 +519,8 @@ function QueueView:showRowMenu(article)
         end }},
         {{ text = _("Copy URL to clipboard"),
            callback = function() fire("copy_url") end }},
+        {{ text = _("Summary"),
+           callback = function() fire("summary") end }},
     }
     if self.has_progress_fn and self.has_progress_fn(article) then
         rows[#rows + 1] = {{

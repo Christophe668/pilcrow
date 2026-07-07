@@ -58,6 +58,15 @@ local DEFAULTS = {
     -- GitHub repo to pull releases from. Editable so a user on a fork
     -- can self-update from there. Format "owner/repo".
     update_repo             = "Christophe668/pilcrow",
+    -- LLM article summaries (Settings → Summaries). Provider is either
+    -- "anthropic" (Messages API) or "openai" (any /chat/completions-
+    -- compatible endpoint: OpenAI, OpenRouter, Mistral, local Ollama…).
+    summary_provider        = "anthropic",
+    summary_anthropic_key   = "",
+    summary_anthropic_model = "claude-haiku-4-5",
+    summary_openai_base_url = "https://api.openai.com/v1",
+    summary_openai_key      = "",
+    summary_openai_model    = "gpt-4o-mini",
 }
 
 --- Stash the running plugin's directory + version on the module table
@@ -114,6 +123,23 @@ end
 
 function Settings:imageDir()
     return DataStorage:getDataDir() .. "/pilcrow/" .. self:_backendSubdir() .. "images"
+end
+
+--- Resolved summary-provider config for summarizer.build_request.
+function Settings:summaryConfig()
+    if self:get("summary_provider") == "openai" then
+        return {
+            provider = "openai",
+            api_key  = self:get("summary_openai_key"),
+            model    = self:get("summary_openai_model"),
+            base_url = self:get("summary_openai_base_url"),
+        }
+    end
+    return {
+        provider = "anthropic",
+        api_key  = self:get("summary_anthropic_key"),
+        model    = self:get("summary_anthropic_model"),
+    }
 end
 
 ------------------------------------------------------------------------
@@ -221,6 +247,11 @@ function Settings:_showTop()
                UIManager:close(dialog)
                self:_showReadingSection()
            end }},
+        {{ text = _("Summaries →"),
+           callback = function()
+               UIManager:close(dialog)
+               self:_showSummariesSection()
+           end }},
         {{ text = _("Advanced →"),
            callback = function()
                UIManager:close(dialog)
@@ -297,6 +328,83 @@ function Settings:_showReadingSection()
             {{ text = _("← Back"),
                callback = function() UIManager:close(dialog); self:_showTop() end }},
         },
+    }
+    UIManager:show(dialog)
+end
+
+function Settings:_showSummariesSection()
+    local dialog
+    self._currentRebuild = function()
+        UIManager:close(dialog)
+        self:_showSummariesSection()
+    end
+
+    local provider = self:get("summary_provider") or "anthropic"
+    local function masked(key)
+        local v = self:get(key) or ""
+        if v == "" then return _("(not set)") end
+        return v:sub(1, 8) .. "…"
+    end
+
+    local rows = {
+        {{ text = T(_("Provider: %1"), provider == "openai"
+                and _("OpenAI-compatible") or _("Anthropic")),
+           callback = function()
+               self:set("summary_provider",
+                   provider == "openai" and "anthropic" or "openai")
+               self:_currentRebuild()
+           end }},
+    }
+
+    if provider == "openai" then
+        rows[#rows + 1] = {{
+            text = T(_("Base URL: %1"), self:get("summary_openai_base_url") or ""),
+            callback = function()
+                show_string_input(_("OpenAI-compatible base URL"),
+                    self:get("summary_openai_base_url"),
+                    function(v) self:set("summary_openai_base_url", v); self:_currentRebuild() end)
+            end }}
+        rows[#rows + 1] = {{
+            text = T(_("API key: %1"), masked("summary_openai_key")),
+            callback = function()
+                show_string_input(_("API key"),
+                    self:get("summary_openai_key"),
+                    function(v) self:set("summary_openai_key", v); self:_currentRebuild() end)
+            end }}
+        rows[#rows + 1] = {{
+            text = T(_("Model: %1"), self:get("summary_openai_model") or ""),
+            callback = function()
+                show_string_input(_("Model name"),
+                    self:get("summary_openai_model"),
+                    function(v) self:set("summary_openai_model", v); self:_currentRebuild() end)
+            end }}
+    else
+        rows[#rows + 1] = {{
+            text = T(_("API key: %1"), masked("summary_anthropic_key")),
+            callback = function()
+                show_string_input(_("Anthropic API key"),
+                    self:get("summary_anthropic_key"),
+                    function(v) self:set("summary_anthropic_key", v); self:_currentRebuild() end)
+            end }}
+        rows[#rows + 1] = {{
+            text = T(_("Model: %1"), self:get("summary_anthropic_model") or ""),
+            callback = function()
+                show_string_input(_("Model name"),
+                    self:get("summary_anthropic_model"),
+                    function(v) self:set("summary_anthropic_model", v); self:_currentRebuild() end)
+            end }}
+    end
+
+    rows[#rows + 1] = {{ text = _("← Back"),
+        callback = function()
+            UIManager:close(dialog)
+            self:_showTop()
+        end }}
+
+    dialog = ButtonDialog:new{
+        title = _("Summaries"),
+        title_align = "center",
+        buttons = rows,
     }
     UIManager:show(dialog)
 end

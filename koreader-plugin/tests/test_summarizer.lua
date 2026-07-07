@@ -30,9 +30,14 @@ H.eq("long text cut to budget", #Summarizer.truncate(long), Summarizer.MAX_CHARS
 local multi = string.rep("é", Summarizer.MAX_CHARS)  -- 2 bytes each
 local cut_multi = Summarizer.truncate(multi)
 H.check("truncate <= budget", #cut_multi <= Summarizer.MAX_CHARS)
-local last = cut_multi:byte(#cut_multi)
-H.check("truncate ends on complete char", last < 0x80 or last > 0xBF,
-    string.format("last byte 0x%02X", last))
+H.eq("truncate ends with complete 2-byte char", cut_multi:sub(-2), "é")
+-- 3-byte char straddling the boundary: "€" is \226\130\172
+local straddle = string.rep("a", Summarizer.MAX_CHARS - 1) .. string.rep("€", 10)
+local cut_straddle = Summarizer.truncate(straddle)
+H.check("straddle cut <= budget", #cut_straddle <= Summarizer.MAX_CHARS)
+local sl = cut_straddle:byte(#cut_straddle)
+H.check("straddle drops dangling lead byte", sl < 0x80,
+    string.format("last byte 0x%02X", sl))
 
 -- build_prompt
 local prompt = Summarizer.build_prompt(

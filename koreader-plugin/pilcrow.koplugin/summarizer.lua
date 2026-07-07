@@ -62,12 +62,14 @@ function Summarizer.truncate(text)
     if #text <= Summarizer.MAX_CHARS then return text end
     local cut = Summarizer.MAX_CHARS
     -- Don't split a multi-byte UTF-8 sequence: back up past any
-    -- continuation bytes (0x80-0xBF) at the cut boundary.
+    -- continuation bytes (0x80-0xBF), then drop the now-dangling
+    -- lead byte too. Losing one character at a 24k cut is harmless.
     while cut > 1 do
         local b = text:byte(cut)
         if not b or b < 0x80 or b > 0xBF then break end
         cut = cut - 1
     end
+    if cut >= 1 and (text:byte(cut) or 0) >= 0xC0 then cut = cut - 1 end
     return text:sub(1, cut)
 end
 

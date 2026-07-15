@@ -7,6 +7,17 @@ than its own roadmap.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Articles marked read offline stayed in the Unread list until the next
+  sync.** The status filters now treat a locally-finished article (read
+  flag recorded on-device, archive push still pending) as read: it leaves
+  Unread — and shows under Archived — immediately, matching how the rows
+  were already rendered. The long-press / reader-sheet toggle recognises
+  these articles too ("Mark as unread" instead of "Mark as read"), and
+  marking one unread clears the pending flag so the next sync no longer
+  silently re-archives it.
+
 ## [2026.07.2] - 2026-07-07
 
 ### Changed

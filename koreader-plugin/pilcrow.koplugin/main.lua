@@ -251,6 +251,9 @@ function Pilcrow:_downloadArticleTo(article)
     local ok, err_or_path, http_code = self.client:downloadEntry(article.id, fpath, "epub")
     if not ok then return false, err_or_path, http_code end
     self.cache:setLocalPath(article.id, fpath)
+    -- Fresh file on disk — whatever the old flag said no longer holds.
+    -- _maybeEmbedSummary re-sets it if (and only if) it injects.
+    self.cache:setFlag(article.id, "summary_in_epub", nil)
     -- A summary generated before this (re)download — refetch, manual
     -- generation while offline, pre-existing cache — goes straight
     -- into the fresh file while it's guaranteed sidecar-free.
@@ -967,6 +970,16 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
     end
 end
 
+local function parse_id_from_path(path)
+    if not path then return nil end
+    -- Accept any id token that survives `sanitize_id` (alphanumeric +
+    -- `-` / `_`). Returns the id as a string so callers can hand it
+    -- straight to the cache, which keys by `tostring(id)` regardless
+    -- of backend.
+    local id = path:match("%[wr%-id_([%w_%-]+)%]")
+    return id
+end
+
 ------------------------------------------------------------------------
 -- Article summaries (LLM-generated, cached on the article entry)
 ------------------------------------------------------------------------
@@ -987,6 +1000,18 @@ function Pilcrow:_maybeEmbedSummary(article)
         return false
     end
     if DocSettings:hasSidecarFile(path) then return false end
+    -- The sidecar is only written on close/flush, so it can't protect
+    -- the document that is open in the reader right now: crengine is
+    -- anchoring positions/highlights against the pre-injection file
+    -- for the whole session. Never rewrite the open document.
+    local ok_reader, ReaderUI = pcall(require, "apps/reader/readerui")
+    local inst = ok_reader and ReaderUI and ReaderUI.instance or nil
+    local open_file = inst and inst.document
+        and (inst.document.file or inst.document.filename) or nil
+    if open_file and (open_file == path
+            or parse_id_from_path(open_file) == tostring(article.id)) then
+        return false
+    end
     -- ffi/archiver ships with current KOReader; degrade to popup-only
     -- summaries on builds that predate it.
     local ok_arch, archiver = pcall(require, "ffi/archiver")
@@ -1021,7 +1046,7 @@ function Pilcrow:_syncSummaries(set_progress, title, new_keys, full)
     local is_new = {}
     for _, key in ipairs(new_keys or {}) do is_new[key] = true end
     local function eligible(a)
-        return a and not a.is_archived
+        return a and not a.is_archived and not a.finished
            and (not a.summary or a.summary == "")
            and a.local_path and a.local_path ~= ""
            and lfs.attributes(a.local_path, "mode") == "file"
@@ -1051,10 +1076,18 @@ function Pilcrow:_syncSummaries(set_progress, title, new_keys, full)
             execute = os.execute,
             tmp_dir = DataStorage:getDataDir() .. "/pilcrow/summary-tmp",
         }
+        -- Summarizer.summarize reports failures as `false, err`, but a
+        -- raise from deep inside the HTTP/JSON stack would abort the
+        -- whole sync — and be re-selected every sync after. Contain it.
+        local function safe_summarize(...)
+            local called, ok, res = pcall(Summarizer.summarize, ...)
+            if not called then return false, tostring(ok) end
+            return ok, res
+        end
         for i = 1, total do
             local a = targets[i]
             set_progress(T(_("%1: generating summaries… %2 / %3"), title, i, total))
-            local ok, result = Summarizer.summarize(a, self.client, cfg, deps)
+            local ok, result = safe_summarize(a, self.client, cfg, deps)
             if ok then
                 self.cache:setFlag(a.id, "summary", result)
                 self.cache:setFlag(a.id, "summary_model", cfg.model)
@@ -1203,16 +1236,6 @@ end
 ------------------------------------------------------------------------
 -- Mark-on-finish prompt
 ------------------------------------------------------------------------
-
-local function parse_id_from_path(path)
-    if not path then return nil end
-    -- Accept any id token that survives `sanitize_id` (alphanumeric +
-    -- `-` / `_`). Returns the id as a string so callers can hand it
-    -- straight to the cache, which keys by `tostring(id)` regardless
-    -- of backend.
-    local id = path:match("%[wr%-id_([%w_%-]+)%]")
-    return id
-end
 
 ------------------------------------------------------------------------
 -- Top-tap override

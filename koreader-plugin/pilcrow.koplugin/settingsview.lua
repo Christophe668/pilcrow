@@ -229,9 +229,13 @@ function Settings:_importSecretRow(label, on_value)
         text = label,
         callback = function()
             local KeyFile = require("keyfile")
+            -- Same home-dir resolution KOReader's file manager uses, so
+            -- the picker opens where a USB-copied file actually lands
+            -- (e.g. /mnt/onboard on Kobo), not in the hidden data dir.
+            local filemanagerutil = require("apps/filemanager/filemanagerutil")
             local start_dir = G_reader_settings
                 and G_reader_settings:readSetting("home_dir")
-                or DataStorage:getDataDir()
+                or filemanagerutil.getDefaultDir()
             UIManager:show(PathChooser:new{
                 select_directory = false,
                 select_file = true,

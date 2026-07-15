@@ -753,6 +753,14 @@ function Settings:_showReadeckCreds()
                callback = function() close_and(function()
                    editField("access_token", _("Bearer access token"), token)
                end) end }},
+            self:_importSecretRow(_("Import token from file…"), function(v)
+                client:saveCreds{
+                    server_url   = client:get("server_url") or "",
+                    access_token = v,
+                }
+                UIManager:close(dialog)
+                self:_showReadeckCreds()
+            end),
             {{ text = _("Close"),
                callback = function() close_and(reopen) end }},
         },

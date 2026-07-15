@@ -18,6 +18,12 @@ than its own roadmap.
   opened are never rewritten (highlight anchors would shift) — those keep
   the popup summary. Toggle: Settings → Summaries → "Add summary page to
   articles".
+- API keys and the Readeck access token can now be imported from a text
+  file on the device (**Import API key from file…** in Settings →
+  Summaries, **Import token from file…** in the Readeck credentials
+  screen) instead of typed character-by-character on the e-ink
+  keyboard. The file's first non-empty line is used; after a successful
+  import the plugin offers to delete the file.
 
 ### Changed
 
@@ -25,6 +31,17 @@ than its own roadmap.
   summary page or stopping on the first content page no longer marks an
   article as started; reading beyond it does. Old sidecars without page
   counts keep the previous any-progress behavior.
+
+### Fixed
+
+- **Articles marked read offline stayed in the Unread list until the next
+  sync.** The status filters now treat a locally-finished article (read
+  flag recorded on-device, archive push still pending) as read: it leaves
+  Unread — and shows under Archived — immediately, matching how the rows
+  were already rendered. The long-press / reader-sheet toggle recognises
+  these articles too ("Mark as unread" instead of "Mark as read"), and
+  marking one unread clears the pending flag so the next sync no longer
+  silently re-archives it.
 
 ## [2026.07.2] - 2026-07-07
 
@@ -44,7 +61,7 @@ than its own roadmap.
   `koplugin-v…` tag prefix made every release parse as `0.0.0` and the
   installed version always won. The comparator now skips any
   non-numeric prefix. Release tags also switch to a hyphen-free scheme
-  (`koplugin.v…`) that the *old* comparator reads correctly, so
+  (`koplugin.v…`) that the _old_ comparator reads correctly, so
   installs from 2026.07.1 and earlier can pick up this release — and
   future ones — through the built-in updater.
 

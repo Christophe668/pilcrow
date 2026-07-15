@@ -896,14 +896,22 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
         -- Explicit if/else: an `a and f() or g()` chain would fall through
         -- to archiveEntry when unarchiveEntry fails, silently re-archiving
         -- on the server while the cache flips to unread.
+        -- "Read" includes locally-finished articles whose archive push is
+        -- still pending: those must be unarchived, and the pending flag
+        -- cleared — otherwise the next sync's pending-archive pass would
+        -- re-archive an article the user just marked unread.
+        local was_read = Cache.isRead(article)
         local ok
-        if article.is_archived then
+        if was_read then
             ok = self.client:unarchiveEntry(id)
         else
             ok = self.client:archiveEntry(id)
         end
         if ok then
-            self.cache:setFlag(id, "is_archived", not article.is_archived)
+            self.cache:setFlag(id, "is_archived", not was_read)
+            if was_read then
+                self.cache:setFlag(id, "finished", false)
+            end
             self.cache:save()
             if refresh_cb then refresh_cb() end
         else
@@ -1289,8 +1297,8 @@ function Pilcrow:_showReaderActionSheet(reader_menu, ges)
 
     local dialog
     local star_label    = article.is_starred  and _("★ Unstar") or _("☆ Star")
-    local archive_label = article.is_archived and _("◯ Mark as unread")
-                                              or _("✓ Mark as read")
+    local archive_label = Cache.isRead(article) and _("◯ Mark as unread")
+                                                or _("✓ Mark as read")
 
     local buttons = {
         {{ text = _("← Back to queue"),

@@ -42,7 +42,8 @@ side-by-side so flipping back and forth is harmless.
 - **Readeck** — credentials live in `<settings_dir>/readeck.lua` and can be
   edited from Pilcrow Settings → Readeck server & token. You need the
   server URL and a bearer access token (generate one from your Readeck
-  profile → API tokens).
+  profile → API tokens). The token can also be imported from a text file
+  on the device (**Import token from file…**).
 
 > v1 — minimum-viable shape. See [Not yet](#not-yet) for what's intentionally
 > scoped out.
@@ -84,10 +85,14 @@ side-by-side so flipping back and forth is harmless.
   (long-press → Summary, or "Summarize article" in the reader sheet),
   which also serves regeneration. Providers: Anthropic or any
   OpenAI-compatible endpoint (OpenAI, OpenRouter, Mistral, a local Ollama
-  server, …) — Settings → Summaries. Summaries are cached on the device
-  and work offline once generated. An article only counts as "In
-  progress" once you read past the first real content page. Needs wifi
-  and your own API key; article text is sent to the provider you
+  server, …). Configure the provider, API key, and model in Settings →
+  Summaries. Instead of typing the key on the e-ink keyboard, drop it in
+  a text file on the device and use **Import API key from file…** (the
+  file's first line is taken as the key, and you can delete the file
+  right after). Summaries are cached on the device and work offline once
+  generated. An article only counts as "In progress" once you read past
+  the first real content page. Needs wifi and your own API key; article
+  text is sent to the provider you
   configure, so don't enable it for articles you don't want to leave the
   device.
 - When you finish an article (KOReader's `EndOfBook` event), the plugin asks

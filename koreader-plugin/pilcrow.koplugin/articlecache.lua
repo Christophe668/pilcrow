@@ -20,7 +20,8 @@ Schema (top-level):
             is_starred  = boolean,
             tags        = { <string>, ... },
             local_path  = string|nil,  -- set after download
-            finished    = boolean,     -- pushed to server?
+            finished    = boolean,     -- marked read on this device; the
+                                       -- archive push happens on sync
             summary     = string|nil,  -- LLM summary text (device-only)
             summary_model = string|nil,
             summary_in_epub = boolean|nil, -- summary page injected into the local epub
@@ -203,11 +204,20 @@ local function is_in_progress(article, mem)
     return result
 end
 
+--- True when the article is read from the user's point of view:
+--  archived on the server, or marked read on this device while the
+--  archive call couldn't reach the server yet (`finished` — pushed on
+--  the next sync). Static helper (plain article table in) so the row
+--  menus can label/toggle against the same definition the filters use.
+function Cache.isRead(article)
+    return (article.is_archived or article.finished) and true or false
+end
+
 local function pass_status(article, status, mem)
     if status == "all" or status == nil then return true end
-    if status == "unread"      then return not article.is_archived end
+    if status == "unread"      then return not Cache.isRead(article) end
     if status == "starred"     then return article.is_starred  and true or false end
-    if status == "archived"    then return article.is_archived and true or false end
+    if status == "archived"    then return Cache.isRead(article) end
     if status == "in_progress" then return is_in_progress(article, mem) end
     return true
 end

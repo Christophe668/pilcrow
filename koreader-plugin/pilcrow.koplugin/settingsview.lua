@@ -10,11 +10,13 @@ plugin's settings, since both share the same `wallabag.lua` file.
 --]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
+local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Event = require("ui/event")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local LuaSettings = require("luasettings")
+local PathChooser = require("ui/widget/pathchooser")
 local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local T = require("ffi/util").template
@@ -211,6 +213,61 @@ function Settings:_numericRow(key, label, prompt, default, min)
     }}
 end
 
+local IMPORT_ERRORS = {
+    unreadable = _("Couldn't read the file."),
+    too_large  = _("That file is too large to be a key file."),
+    empty      = _("The file is empty."),
+    not_a_key  = _("The file's first line doesn't look like an API key or token."),
+}
+
+--- Row that fills a secret from a text file picked with the file
+--- browser, sparing the user a 100-character e-ink typing session.
+--- `on_value(key)` must persist the secret and rebuild the section
+--- dialog; this helper owns the picker and result dialogs.
+function Settings:_importSecretRow(label, on_value)
+    return {{
+        text = label,
+        callback = function()
+            local KeyFile = require("keyfile")
+            -- Same home-dir resolution KOReader's file manager uses, so
+            -- the picker opens where a USB-copied file actually lands
+            -- (e.g. /mnt/onboard on Kobo), not in the hidden data dir.
+            local filemanagerutil = require("apps/filemanager/filemanagerutil")
+            local start_dir = G_reader_settings
+                and G_reader_settings:readSetting("home_dir")
+                or filemanagerutil.getDefaultDir()
+            UIManager:show(PathChooser:new{
+                select_directory = false,
+                select_file = true,
+                path = start_dir,
+                onConfirm = function(file_path)
+                    local key, err = KeyFile.read(file_path)
+                    if not key then
+                        UIManager:show(InfoMessage:new{
+                            text = IMPORT_ERRORS[err] or _("Import failed."),
+                        })
+                        return
+                    end
+                    on_value(key)
+                    UIManager:show(ConfirmBox:new{
+                        text = T(_("Imported %1 (%2 characters).\n\nDelete the file now that the key is stored in KOReader's settings?"),
+                                 key:sub(1, 4) .. "…" .. key:sub(-4), #key),
+                        ok_text = _("Delete"),
+                        ok_callback = function()
+                            if not os.remove(file_path) then
+                                UIManager:show(InfoMessage:new{
+                                    text = _("Couldn't delete the file."),
+                                })
+                            end
+                        end,
+                        cancel_text = _("Keep"),
+                    })
+                end,
+            })
+        end,
+    }}
+end
+
 --- Open the top-level settings menu.
 function Settings:show()
     self:_showTop()
@@ -371,6 +428,8 @@ function Settings:_showSummariesSection()
                     self:get("summary_openai_key"),
                     function(v) self:set("summary_openai_key", v); self:_currentRebuild() end)
             end }}
+        rows[#rows + 1] = self:_importSecretRow(_("Import API key from file…"),
+            function(v) self:set("summary_openai_key", v); self:_currentRebuild() end)
         rows[#rows + 1] = {{
             text = T(_("Model: %1"), self:get("summary_openai_model") or ""),
             callback = function()
@@ -386,6 +445,8 @@ function Settings:_showSummariesSection()
                     self:get("summary_anthropic_key"),
                     function(v) self:set("summary_anthropic_key", v); self:_currentRebuild() end)
             end }}
+        rows[#rows + 1] = self:_importSecretRow(_("Import API key from file…"),
+            function(v) self:set("summary_anthropic_key", v); self:_currentRebuild() end)
         rows[#rows + 1] = {{
             text = T(_("Model: %1"), self:get("summary_anthropic_model") or ""),
             callback = function()
@@ -696,6 +757,14 @@ function Settings:_showReadeckCreds()
                callback = function() close_and(function()
                    editField("access_token", _("Bearer access token"), token)
                end) end }},
+            self:_importSecretRow(_("Import token from file…"), function(v)
+                client:saveCreds{
+                    server_url   = client:get("server_url") or "",
+                    access_token = v,
+                }
+                UIManager:close(dialog)
+                self:_showReadeckCreds()
+            end),
             {{ text = _("Close"),
                callback = function() close_and(reopen) end }},
         },

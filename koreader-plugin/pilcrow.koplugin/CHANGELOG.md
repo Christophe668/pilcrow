@@ -9,12 +9,28 @@ than its own roadmap.
 
 ### Added
 
+- **Summaries generate during sync.** New articles get their LLM summary
+  as part of the sync pass (newest first; full syncs also drain up to 10
+  backlog articles per run). Failures are counted in the sync message and
+  retried next sync. Toggle: Settings → Summaries → "Generate during sync".
+- **Summary as the first page.** Freshly downloaded articles are rewritten
+  so the summary appears as page 1 of the EPUB. Documents you've already
+  opened are never rewritten (highlight anchors would shift) — those keep
+  the popup summary. Toggle: Settings → Summaries → "Add summary page to
+  articles".
 - API keys and the Readeck access token can now be imported from a text
   file on the device (**Import API key from file…** in Settings →
   Summaries, **Import token from file…** in the Readeck credentials
   screen) instead of typed character-by-character on the e-ink
   keyboard. The file's first non-empty line is used; after a successful
   import the plugin offers to delete the file.
+
+### Changed
+
+- **"In progress" now means past the first real page.** Peeking at the
+  summary page or stopping on the first content page no longer marks an
+  article as started; reading beyond it does. Old sidecars without page
+  counts keep the previous any-progress behavior.
 
 ### Fixed
 

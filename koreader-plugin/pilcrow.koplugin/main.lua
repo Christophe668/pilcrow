@@ -27,11 +27,17 @@ local T = require("ffi/util").template
 
 local STYLE_TWEAK_FILE = "wallabag-code.css"
 
+-- LLM calls per sync. Bounds cost and, more importantly, wall-clock
+-- time: each call blocks 5-15 s, so 10 keeps the worst case around
+-- two minutes on an explicit sync.
+local SUMMARY_SYNC_CAP = 10
+
 local BackendClient = require("backendclient")
 local Cache = require("articlecache")
 local QueueView = require("queueview")
 local SettingsView = require("settingsview")
 local Summarizer = require("summarizer")
+local SummaryPage = require("summarypage")
 
 ------------------------------------------------------------------------
 -- Menu-order injection
@@ -245,6 +251,16 @@ function Pilcrow:_downloadArticleTo(article)
     local ok, err_or_path, http_code = self.client:downloadEntry(article.id, fpath, "epub")
     if not ok then return false, err_or_path, http_code end
     self.cache:setLocalPath(article.id, fpath)
+    -- Fresh file on disk — whatever the old flag said no longer holds.
+    -- _maybeEmbedSummary re-sets it if (and only if) it injects.
+    self.cache:setFlag(article.id, "summary_in_epub", nil)
+    -- A summary generated before this (re)download — refetch, manual
+    -- generation while offline, pre-existing cache — goes straight
+    -- into the fresh file while it's guaranteed sidecar-free.
+    local cached = self.cache:get(article.id)
+    if cached and cached.summary and cached.summary ~= "" then
+        self:_maybeEmbedSummary(cached)
+    end
     return true, fpath
 end
 
@@ -778,6 +794,12 @@ function Pilcrow:_doSync(done_cb, ctx)
         if epubs_dl > 0 then self.cache:save() end
     end
 
+    -- LLM summaries for freshly added articles (and, on full syncs,
+    -- the backlog). Runs after the epub downloads so the article text
+    -- can be read locally, and before annotations so a mid-sync
+    -- failure there can't cost us already-paid-for summaries.
+    local summary_counters = self:_syncSummaries(set_progress, title, new_articles, full)
+
     -- Two-way annotation sync. Push first so any new local highlights
     -- exist on the server before we pull, then pull so the Highlights
     -- view reflects the freshest set including the ones we just sent.
@@ -820,6 +842,10 @@ function Pilcrow:_doSync(done_cb, ctx)
     end
     if images_dl + images_skipped > 0 then
         msg = msg .. " " .. T(_("(%1 images, %2 skipped)"), images_dl, images_skipped)
+    end
+    if summary_counters.generated + summary_counters.failed > 0 then
+        msg = msg .. " " .. T(_("(%1 summaries generated, %2 failed)"),
+                              summary_counters.generated, summary_counters.failed)
     end
     if push_counters.pushed > 0 or push_counters.failed > 0 then
         msg = msg .. " " .. T(_("(%1 highlights pushed, %2 failed)"),
@@ -941,6 +967,7 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
             os.remove(article.local_path)
         end
         self.cache:setFlag(id, "local_path", nil)
+        self.cache:setFlag(id, "summary_in_epub", nil)
         self:_pruneImageFor(id)
         self.cache:setFlag(id, "image_path", nil)
         self.cache:save()
@@ -951,9 +978,155 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
     end
 end
 
+local function parse_id_from_path(path)
+    if not path then return nil end
+    -- Accept any id token that survives `sanitize_id` (alphanumeric +
+    -- `-` / `_`). Returns the id as a string so callers can hand it
+    -- straight to the cache, which keys by `tostring(id)` regardless
+    -- of backend.
+    local id = path:match("%[wr%-id_([%w_%-]+)%]")
+    return id
+end
+
 ------------------------------------------------------------------------
 -- Article summaries (LLM-generated, cached on the article entry)
 ------------------------------------------------------------------------
+
+--- Rewrite the article's EPUB so the cached summary is its first page.
+-- Hard requirement: never touch a document the user has opened —
+-- crengine addresses highlights and reading positions by DocFragment
+-- index (`/body/DocFragment[N]/…`), so inserting a page would shift
+-- every existing anchor. Such articles keep the popup summary only.
+-- Returns true when the page was (re)written into the EPUB.
+function Pilcrow:_maybeEmbedSummary(article)
+    if not self.settings:get("summary_embed_in_epub") then return false end
+    if not article or not article.summary or article.summary == "" then
+        return false
+    end
+    local path = article.local_path
+    if not path or path == "" or lfs.attributes(path, "mode") ~= "file" then
+        return false
+    end
+    if DocSettings:hasSidecarFile(path) then return false end
+    -- The sidecar is only written on close/flush, so it can't protect
+    -- the document that is open in the reader right now: crengine is
+    -- anchoring positions/highlights against the pre-injection file
+    -- for the whole session. Never rewrite the open document.
+    local ok_reader, ReaderUI = pcall(require, "apps/reader/readerui")
+    local inst = ok_reader and ReaderUI and ReaderUI.instance or nil
+    local open_file = inst and inst.document
+        and (inst.document.file or inst.document.filename) or nil
+    if open_file and (open_file == path
+            or parse_id_from_path(open_file) == tostring(article.id)) then
+        return false
+    end
+    -- ffi/archiver ships with current KOReader; degrade to popup-only
+    -- summaries on builds that predate it.
+    local ok_arch, archiver = pcall(require, "ffi/archiver")
+    if not ok_arch then
+        logger.warn("pilcrow/summary: ffi/archiver unavailable; summary page skipped")
+        return false
+    end
+    local xhtml = SummaryPage.build_xhtml(article, article.summary, article.summary_model)
+    local ok, err = SummaryPage.inject(path, xhtml, { archiver = archiver })
+    if not ok then
+        logger.warn("pilcrow/summary: embed failed for", article.id, err)
+        return false
+    end
+    self.cache:setFlag(article.id, "summary_in_epub", true)
+    self.cache:save()
+    return true
+end
+
+--- Sync phase: generate missing summaries, newest first, then embed
+-- them. This sync's new arrivals always go first; the backlog (older
+-- articles without a summary) is only drained on full/manual syncs —
+-- light auto-syncs are quiet, with no progress UI to excuse a
+-- multi-minute stall. Failures are logged and counted, never fatal:
+-- a failed article simply still has no summary and is retried on a
+-- later sync. Returns { generated, failed, embedded }.
+function Pilcrow:_syncSummaries(set_progress, title, new_keys, full)
+    local counters = { generated = 0, failed = 0, embedded = 0 }
+    if not self.settings:get("summary_auto_on_sync") then return counters end
+    local cfg = self.settings:summaryConfig()
+    if not cfg.api_key or cfg.api_key == "" then return counters end
+
+    local is_new = {}
+    for _, key in ipairs(new_keys or {}) do is_new[key] = true end
+    local function eligible(a)
+        return a and not a.is_archived and not a.finished
+           and (not a.summary or a.summary == "")
+           and a.local_path and a.local_path ~= ""
+           and lfs.attributes(a.local_path, "mode") == "file"
+    end
+    local fresh, backlog = {}, {}
+    for _, key in ipairs(self.cache:listIds()) do
+        local a = self.cache:get(key)
+        if eligible(a) then
+            local bucket = is_new[key] and fresh or backlog
+            bucket[#bucket + 1] = a
+        end
+    end
+    local by_newest = function(x, y)
+        return (x.created_at or "") > (y.created_at or "")
+    end
+    table.sort(fresh, by_newest)
+    table.sort(backlog, by_newest)
+    local targets = fresh
+    if full then
+        for _, a in ipairs(backlog) do targets[#targets + 1] = a end
+    end
+
+    local total = math.min(#targets, SUMMARY_SYNC_CAP)
+    if total > 0 then
+        local deps = {
+            lfs = lfs,
+            execute = os.execute,
+            tmp_dir = DataStorage:getDataDir() .. "/pilcrow/summary-tmp",
+        }
+        -- Summarizer.summarize reports failures as `false, err`, but a
+        -- raise from deep inside the HTTP/JSON stack would abort the
+        -- whole sync — and be re-selected every sync after. Contain it.
+        local function safe_summarize(...)
+            local called, ok, res = pcall(Summarizer.summarize, ...)
+            if not called then return false, tostring(ok) end
+            return ok, res
+        end
+        for i = 1, total do
+            local a = targets[i]
+            set_progress(T(_("%1: generating summaries… %2 / %3"), title, i, total))
+            local ok, result = safe_summarize(a, self.client, cfg, deps)
+            if ok then
+                self.cache:setFlag(a.id, "summary", result)
+                self.cache:setFlag(a.id, "summary_model", cfg.model)
+                counters.generated = counters.generated + 1
+                if self:_maybeEmbedSummary(self.cache:get(a.id)) then
+                    counters.embedded = counters.embedded + 1
+                end
+            else
+                counters.failed = counters.failed + 1
+                logger.warn("pilcrow/summary: sync generation failed for", a.id, result)
+            end
+        end
+        self.cache:save()
+    end
+
+    -- Embed-only sweep: summaries that exist but aren't in their epub
+    -- yet (generated before this feature, embed toggle was off, or the
+    -- epub was re-downloaded). No LLM cost; _maybeEmbedSummary's
+    -- no-sidecar rule keeps every opened document untouched.
+    for _, key in ipairs(self.cache:listIds()) do
+        local a = self.cache:get(key)
+        if a and not a.is_archived and a.summary and a.summary ~= ""
+           and not a.summary_in_epub then
+            if self:_maybeEmbedSummary(a) then
+                counters.embedded = counters.embedded + 1
+            end
+        end
+    end
+
+    return counters
+end
 
 function Pilcrow:showSummary(article)
     if article.summary and article.summary ~= "" then
@@ -998,6 +1171,7 @@ function Pilcrow:_generateSummary(article)
     self.cache:setFlag(article.id, "summary", result)
     self.cache:setFlag(article.id, "summary_model", cfg.model)
     self.cache:save()
+    self:_maybeEmbedSummary(self.cache:get(article.id))
     self:_showSummaryDialog(self.cache:get(article.id) or article)
 end
 
@@ -1070,16 +1244,6 @@ end
 ------------------------------------------------------------------------
 -- Mark-on-finish prompt
 ------------------------------------------------------------------------
-
-local function parse_id_from_path(path)
-    if not path then return nil end
-    -- Accept any id token that survives `sanitize_id` (alphanumeric +
-    -- `-` / `_`). Returns the id as a string so callers can hand it
-    -- straight to the cache, which keys by `tostring(id)` regardless
-    -- of backend.
-    local id = path:match("%[wr%-id_([%w_%-]+)%]")
-    return id
-end
 
 ------------------------------------------------------------------------
 -- Top-tap override
@@ -1463,6 +1627,7 @@ function Pilcrow:_refetchArticle(article)
         os.remove(article.local_path)
     end
     self.cache:setFlag(article.id, "local_path", nil)
+    self.cache:setFlag(article.id, "summary_in_epub", nil)
     self:_pruneImageFor(article.id)
     self.cache:setFlag(article.id, "image_path", nil)
     self.cache:save()

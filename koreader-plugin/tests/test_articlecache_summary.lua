@@ -23,4 +23,8 @@ local a = cache:get(42)
 H.eq("summary survives sync", a.summary, "A cached summary.")
 H.eq("summary_model survives sync", a.summary_model, "claude-haiku-4-5")
 
+cache:setFlag(42, "summary_in_epub", true)
+cache:upsertFromApi(api_entry)
+H.eq("summary_in_epub survives sync", cache:get(42).summary_in_epub, true)
+
 H.finish()

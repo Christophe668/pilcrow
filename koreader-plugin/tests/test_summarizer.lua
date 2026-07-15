@@ -148,4 +148,21 @@ local etext, eerr = Summarizer.extract_epub_text("/x.epub", {
 })
 H.check("unzip failure reported", etext == nil and eerr == "unzip_failed", eerr)
 
+------------------------------------------------------------------------
+-- _collect_html skips the injected summary page
+------------------------------------------------------------------------
+
+local fake_lfs = {
+    dir = function(_d)
+        local names = { ".", "..", "b.xhtml", "pilcrow-summary.xhtml", "a.html", "style.css" }
+        local i = 0
+        return function() i = i + 1; return names[i] end
+    end,
+    attributes = function(_path, _what) return "file" end,
+}
+local collected = Summarizer._collect_html("/root", fake_lfs)
+H.eq("summary page skipped: count", #collected, 2)
+H.eq("first html kept", collected[1], "/root/a.html")
+H.eq("second html kept", collected[2], "/root/b.xhtml")
+
 H.finish()

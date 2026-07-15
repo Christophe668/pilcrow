@@ -87,7 +87,7 @@ H.eq("nil opf err", err3, "opf_missing")
 
 -- Minimal in-memory double of ffi/archiver. `opts.write_fails` makes
 -- Writer:addFileFromMemory fail for that entry path; `opts.reader_open_fails`
--- makes Reader:open fail.
+-- makes Reader:open fail; `opts.writer_open_fails` makes Writer:open fail.
 local function stub_archiver(files, opts)
     opts = opts or {}
     local state = { written = {}, writer_opened = nil, compression = "none" }
@@ -121,6 +121,7 @@ local function stub_archiver(files, opts)
     function Writer.new() return setmetatable({}, Writer) end
     function Writer:open(path)
         state.writer_opened = path
+        if opts.writer_open_fails then return nil end
         return true
     end
     function Writer:setZipCompression(method)
@@ -234,5 +235,15 @@ H.eq("bad opf: no rename", #log5.renames, 0)
 local nok6, nerr6 = SummaryPage.inject("/x/book.epub", "s", {})
 H.eq("missing archiver returns nil", nok6, nil)
 H.eq("missing archiver err", nerr6, "no_archiver")
+
+-- Writer can't open the tmp file: no rename, tmp cleaned up anyway.
+local arch7 = select(1, stub_archiver(EPUB_FILES, { writer_open_fails = true }))
+local log7, rename7, remove7 = spies()
+local nok7, nerr7 = SummaryPage.inject("/x/book.epub", "s",
+    { archiver = arch7, rename = rename7, remove = remove7 })
+H.eq("writer open failure returns nil", nok7, nil)
+H.eq("writer open failure err", nerr7, "tmp_open_failed")
+H.eq("writer open failure: no rename", #log7.renames, 0)
+H.eq("writer open failure: tmp removed", log7.removes[1], "/x/book.epub.pilcrow-tmp")
 
 H.finish()

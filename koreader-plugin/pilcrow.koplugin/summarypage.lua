@@ -145,6 +145,7 @@ function SummaryPage.inject(epub_path, xhtml, deps)
     local writer = archiver.Writer:new()
     if not writer:open(tmp_path, "epub") then
         reader:close()
+        remove(tmp_path)
         return nil, "tmp_open_failed"
     end
     local mtime = os.time()

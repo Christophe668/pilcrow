@@ -27,6 +27,11 @@ local T = require("ffi/util").template
 
 local STYLE_TWEAK_FILE = "wallabag-code.css"
 
+-- LLM calls per sync. Bounds cost and, more importantly, wall-clock
+-- time: each call blocks 5-15 s, so 10 keeps the worst case around
+-- two minutes on an explicit sync.
+local SUMMARY_SYNC_CAP = 10
+
 local BackendClient = require("backendclient")
 local Cache = require("articlecache")
 local QueueView = require("queueview")
@@ -786,6 +791,12 @@ function Pilcrow:_doSync(done_cb, ctx)
         if epubs_dl > 0 then self.cache:save() end
     end
 
+    -- LLM summaries for freshly added articles (and, on full syncs,
+    -- the backlog). Runs after the epub downloads so the article text
+    -- can be read locally, and before annotations so a mid-sync
+    -- failure there can't cost us already-paid-for summaries.
+    local summary_counters = self:_syncSummaries(set_progress, title, new_articles, full)
+
     -- Two-way annotation sync. Push first so any new local highlights
     -- exist on the server before we pull, then pull so the Highlights
     -- view reflects the freshest set including the ones we just sent.
@@ -828,6 +839,10 @@ function Pilcrow:_doSync(done_cb, ctx)
     end
     if images_dl + images_skipped > 0 then
         msg = msg .. " " .. T(_("(%1 images, %2 skipped)"), images_dl, images_skipped)
+    end
+    if summary_counters.generated + summary_counters.failed > 0 then
+        msg = msg .. " " .. T(_("(%1 summaries generated, %2 failed)"),
+                              summary_counters.generated, summary_counters.failed)
     end
     if push_counters.pushed > 0 or push_counters.failed > 0 then
         msg = msg .. " " .. T(_("(%1 highlights pushed, %2 failed)"),
@@ -988,6 +1003,88 @@ function Pilcrow:_maybeEmbedSummary(article)
     self.cache:setFlag(article.id, "summary_in_epub", true)
     self.cache:save()
     return true
+end
+
+--- Sync phase: generate missing summaries, newest first, then embed
+-- them. This sync's new arrivals always go first; the backlog (older
+-- articles without a summary) is only drained on full/manual syncs —
+-- light auto-syncs are quiet, with no progress UI to excuse a
+-- multi-minute stall. Failures are logged and counted, never fatal:
+-- a failed article simply still has no summary and is retried on a
+-- later sync. Returns { generated, failed, embedded }.
+function Pilcrow:_syncSummaries(set_progress, title, new_keys, full)
+    local counters = { generated = 0, failed = 0, embedded = 0 }
+    if not self.settings:get("summary_auto_on_sync") then return counters end
+    local cfg = self.settings:summaryConfig()
+    if not cfg.api_key or cfg.api_key == "" then return counters end
+
+    local is_new = {}
+    for _, key in ipairs(new_keys or {}) do is_new[key] = true end
+    local function eligible(a)
+        return a and not a.is_archived
+           and (not a.summary or a.summary == "")
+           and a.local_path and a.local_path ~= ""
+           and lfs.attributes(a.local_path, "mode") == "file"
+    end
+    local fresh, backlog = {}, {}
+    for _, key in ipairs(self.cache:listIds()) do
+        local a = self.cache:get(key)
+        if eligible(a) then
+            local bucket = is_new[key] and fresh or backlog
+            bucket[#bucket + 1] = a
+        end
+    end
+    local by_newest = function(x, y)
+        return (x.created_at or "") > (y.created_at or "")
+    end
+    table.sort(fresh, by_newest)
+    table.sort(backlog, by_newest)
+    local targets = fresh
+    if full then
+        for _, a in ipairs(backlog) do targets[#targets + 1] = a end
+    end
+
+    local total = math.min(#targets, SUMMARY_SYNC_CAP)
+    if total > 0 then
+        local deps = {
+            lfs = lfs,
+            execute = os.execute,
+            tmp_dir = DataStorage:getDataDir() .. "/pilcrow/summary-tmp",
+        }
+        for i = 1, total do
+            local a = targets[i]
+            set_progress(T(_("%1: generating summaries… %2 / %3"), title, i, total))
+            local ok, result = Summarizer.summarize(a, self.client, cfg, deps)
+            if ok then
+                self.cache:setFlag(a.id, "summary", result)
+                self.cache:setFlag(a.id, "summary_model", cfg.model)
+                counters.generated = counters.generated + 1
+                if self:_maybeEmbedSummary(self.cache:get(a.id)) then
+                    counters.embedded = counters.embedded + 1
+                end
+            else
+                counters.failed = counters.failed + 1
+                logger.warn("pilcrow/summary: sync generation failed for", a.id, result)
+            end
+        end
+        self.cache:save()
+    end
+
+    -- Embed-only sweep: summaries that exist but aren't in their epub
+    -- yet (generated before this feature, embed toggle was off, or the
+    -- epub was re-downloaded). No LLM cost; _maybeEmbedSummary's
+    -- no-sidecar rule keeps every opened document untouched.
+    for _, key in ipairs(self.cache:listIds()) do
+        local a = self.cache:get(key)
+        if a and not a.is_archived and a.summary and a.summary ~= ""
+           and not a.summary_in_epub then
+            if self:_maybeEmbedSummary(a) then
+                counters.embedded = counters.embedded + 1
+            end
+        end
+    end
+
+    return counters
 end
 
 function Pilcrow:showSummary(article)

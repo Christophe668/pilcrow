@@ -175,7 +175,8 @@ function Summarizer._collect_html(dir, lfs)
                 local path = d .. "/" .. entry
                 if lfs.attributes(path, "mode") == "directory" then
                     walk(path)
-                elseif entry:lower():match("%.x?html?$") then
+                elseif entry:lower():match("%.x?html?$")
+                   and entry:lower() ~= "pilcrow-summary.xhtml" then
                     files[#files + 1] = path
                 end
             end

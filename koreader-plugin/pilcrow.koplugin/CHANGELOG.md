@@ -36,7 +36,7 @@ than its own roadmap.
   `koplugin-v…` tag prefix made every release parse as `0.0.0` and the
   installed version always won. The comparator now skips any
   non-numeric prefix. Release tags also switch to a hyphen-free scheme
-  (`koplugin.v…`) that the *old* comparator reads correctly, so
+  (`koplugin.v…`) that the _old_ comparator reads correctly, so
   installs from 2026.07.1 and earlier can pick up this release — and
   future ones — through the built-in updater.
 

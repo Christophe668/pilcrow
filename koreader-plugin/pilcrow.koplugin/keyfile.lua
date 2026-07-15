@@ -37,4 +37,16 @@ function KeyFile.extract(content)
     return nil, "empty"
 end
 
+--- Read a key file from disk. Rejects files over MAX_BYTES so picking
+--- an epub by mistake fails fast instead of storing garbage.
+--- Returns key, or nil + "unreadable"/"too_large"/"empty"/"not_a_key".
+function KeyFile.read(path)
+    local f = io.open(path, "rb")
+    if not f then return nil, "unreadable" end
+    local data = f:read(KeyFile.MAX_BYTES + 1)
+    f:close()
+    if data and #data > KeyFile.MAX_BYTES then return nil, "too_large" end
+    return KeyFile.extract(data or "")
+end
+
 return KeyFile

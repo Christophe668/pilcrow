@@ -28,4 +28,27 @@ H.eq("non-ascii", reason("clé-secrète-1234\n"), "not_a_key")
 H.eq("max length accepted", KeyFile.extract(string.rep("a", KeyFile.MAX_KEY_CHARS)), string.rep("a", KeyFile.MAX_KEY_CHARS))
 H.eq("min length accepted", KeyFile.extract("abcd1234"), "abcd1234")
 
+-- read: io layer
+local tmp = "/tmp/pilcrow-test-keyfile.txt"
+local function write_tmp(content)
+    local f = assert(io.open(tmp, "wb"))
+    f:write(content)
+    f:close()
+end
+
+write_tmp("sk-ant-api03-abcdef123456\n")
+H.eq("read happy path", KeyFile.read(tmp), "sk-ant-api03-abcdef123456")
+
+write_tmp(string.rep("a", KeyFile.MAX_BYTES + 1))
+local key, err = KeyFile.read(tmp)
+H.eq("read oversized file", key == nil and err or "unexpected key", "too_large")
+
+write_tmp("")
+key, err = KeyFile.read(tmp)
+H.eq("read empty file", key == nil and err or "unexpected key", "empty")
+
+os.remove(tmp)
+key, err = KeyFile.read(tmp)
+H.eq("read missing file", key == nil and err or "unexpected key", "unreadable")
+
 H.finish()

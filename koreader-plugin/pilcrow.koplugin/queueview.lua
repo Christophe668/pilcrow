@@ -27,6 +27,7 @@ local UIManager = require("ui/uimanager")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
+local ArticleCache = require("articlecache")
 local ArticleCard = require("articlecard")
 local ArticleRow = require("articlerow")
 local ChipRowMod = require("chiprow")
@@ -498,7 +499,8 @@ function QueueView:showRowMenu(article)
         end
     end
 
-    local read_label = article.is_archived and _("Mark as unread") or _("Mark as read")
+    local read_label = ArticleCache.isRead(article) and _("Mark as unread")
+                                                    or _("Mark as read")
     local star_label = article.is_starred  and _("Unstar")          or _("Star")
 
     local backend_title = BACKEND_TITLES[self.backend_kind] or _("Wallabag")

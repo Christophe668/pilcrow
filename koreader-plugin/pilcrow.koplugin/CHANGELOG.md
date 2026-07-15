@@ -7,6 +7,25 @@ than its own roadmap.
 
 ## [Unreleased]
 
+### Added
+
+- **Summaries generate during sync.** New articles get their LLM summary
+  as part of the sync pass (newest first; full syncs also drain up to 10
+  backlog articles per run). Failures are counted in the sync message and
+  retried next sync. Toggle: Settings → Summaries → "Generate during sync".
+- **Summary as the first page.** Freshly downloaded articles are rewritten
+  so the summary appears as page 1 of the EPUB. Documents you've already
+  opened are never rewritten (highlight anchors would shift) — those keep
+  the popup summary. Toggle: Settings → Summaries → "Add summary page to
+  articles".
+
+### Changed
+
+- **"In progress" now means past the first real page.** Peeking at the
+  summary page or stopping on the first content page no longer marks an
+  article as started; reading beyond it does. Old sidecars without page
+  counts keep the previous any-progress behavior.
+
 ## [2026.07.2] - 2026-07-07
 
 ### Changed

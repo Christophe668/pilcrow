@@ -76,14 +76,18 @@ side-by-side so flipping back and forth is harmless.
   been downloaded yet, it's fetched on demand.
 - **Long-press** a row for: Mark as read · Star · Delete · Copy URL to
   clipboard · **Summary**.
-- **Article summaries** (optional): long-press → Summary, or "Summarize
-  article" from the in-reader action sheet, generates a ~130-word summary
-  of the article in its own language via an LLM API — Anthropic or any
+- **Article summaries** (optional): with an API key configured, sync
+  generates a ~130-word summary for new articles automatically (newest
+  first; manual syncs also drain a capped backlog) and embeds it as the
+  **first page** of the downloaded EPUB. Articles you've already opened
+  are never rewritten — their summary stays available from the popup
+  (long-press → Summary, or "Summarize article" in the reader sheet),
+  which also serves regeneration. Providers: Anthropic or any
   OpenAI-compatible endpoint (OpenAI, OpenRouter, Mistral, a local Ollama
-  server, …). Configure the provider, API key, and model in Settings →
-  Summaries. Summaries are cached on the device (they survive syncs and
-  work offline once generated); a Regenerate button re-runs the request.
-  Needs wifi and your own API key; text is sent to the provider you
+  server, …) — Settings → Summaries. Summaries are cached on the device
+  and work offline once generated. An article only counts as "In
+  progress" once you read past the first real content page. Needs wifi
+  and your own API key; article text is sent to the provider you
   configure, so don't enable it for articles you don't want to leave the
   device.
 - When you finish an article (KOReader's `EndOfBook` event), the plugin asks

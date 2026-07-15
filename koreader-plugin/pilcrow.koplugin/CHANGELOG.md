@@ -7,6 +7,15 @@ than its own roadmap.
 
 ## [Unreleased]
 
+### Added
+
+- API keys and the Readeck access token can now be imported from a text
+  file on the device (**Import API key from file…** in Settings →
+  Summaries, **Import token from file…** in the Readeck credentials
+  screen) instead of typed character-by-character on the e-ink
+  keyboard. The file's first non-empty line is used; after a successful
+  import the plugin offers to delete the file.
+
 ## [2026.07.2] - 2026-07-07
 
 ### Changed

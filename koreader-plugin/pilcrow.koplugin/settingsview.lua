@@ -67,6 +67,14 @@ local DEFAULTS = {
     summary_openai_base_url = "https://api.openai.com/v1",
     summary_openai_key      = "",
     summary_openai_model    = "gpt-4o-mini",
+    -- Generate summaries automatically during sync: new arrivals every
+    -- sync, plus a capped backlog sweep on full/manual syncs. Inert
+    -- until an API key is configured above.
+    summary_auto_on_sync    = true,
+    -- Rewrite freshly downloaded epubs so the summary is the first
+    -- page. Documents that have been opened are never rewritten (their
+    -- highlight anchors would shift).
+    summary_embed_in_epub   = true,
 }
 
 --- Stash the running plugin's directory + version on the module table
@@ -394,6 +402,11 @@ function Settings:_showSummariesSection()
                     function(v) self:set("summary_anthropic_model", v); self:_currentRebuild() end)
             end }}
     end
+
+    rows[#rows + 1] = self:_toggleRow("summary_auto_on_sync",
+        _("Generate during sync"))
+    rows[#rows + 1] = self:_toggleRow("summary_embed_in_epub",
+        _("Add summary page to articles"))
 
     rows[#rows + 1] = {{ text = _("← Back"),
         callback = function()

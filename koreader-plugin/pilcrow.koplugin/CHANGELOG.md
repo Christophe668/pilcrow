@@ -7,6 +7,8 @@ than its own roadmap.
 
 ## [Unreleased]
 
+## [2026.07.3] - 2026-07-15
+
 ### Added
 
 - **Summaries generate during sync.** New articles get their LLM summary

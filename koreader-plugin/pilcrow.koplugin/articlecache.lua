@@ -21,6 +21,9 @@ Schema (top-level):
             tags        = { <string>, ... },
             local_path  = string|nil,  -- set after download
             finished    = boolean,     -- pushed to server?
+            summary     = string|nil,  -- LLM summary text (device-only)
+            summary_model = string|nil,
+            summary_in_epub = boolean|nil, -- summary page injected into the local epub
         },
         ...
     },
@@ -174,7 +177,25 @@ local function is_in_progress(article, mem)
             local summary = doc_settings:readSetting("summary") or {}
             local percent = tonumber(doc_settings:readSetting("percent_finished")) or 0
             if percent > 0 and percent < 1 and summary.status ~= "complete" then
-                result = true
+                -- "Started" means past the first *real* page. Page 1 is
+                -- the injected summary page when present, so peeking at
+                -- it (or stopping on the first content page) leaves the
+                -- article unread. percent_finished is current_page /
+                -- doc_pages, both written on close, so the division
+                -- recovers the exact page.
+                local pages = tonumber(doc_settings:readSetting("doc_pages"))
+                if not pages then
+                    local stats = doc_settings:readSetting("stats")
+                    pages = type(stats) == "table" and tonumber(stats.pages) or nil
+                end
+                if pages and pages > 0 then
+                    local current_page = math.floor(percent * pages + 0.5)
+                    local first_real_page = article.summary_in_epub and 2 or 1
+                    result = current_page > first_real_page
+                else
+                    -- Old sidecar without page counts: keep legacy behavior.
+                    result = true
+                end
             end
         end
     end
@@ -372,6 +393,7 @@ function Cache:upsertFromApi(api_article)
         server_annotations = existing.server_annotations,
         summary            = existing.summary,
         summary_model      = existing.summary_model,
+        summary_in_epub    = existing.summary_in_epub,
     }
 end
 
@@ -387,7 +409,8 @@ function Cache:setFlag(id, key, value)
     if not entry then return end
     entry[key] = value
     -- Any of these can flip the in-progress verdict.
-    if key == "finished" or key == "is_archived" or key == "local_path" then
+    if key == "finished" or key == "is_archived" or key == "local_path"
+       or key == "summary_in_epub" then
         self:invalidateProgress(id)
     end
 end

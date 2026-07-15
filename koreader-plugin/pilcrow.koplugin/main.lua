@@ -32,6 +32,7 @@ local Cache = require("articlecache")
 local QueueView = require("queueview")
 local SettingsView = require("settingsview")
 local Summarizer = require("summarizer")
+local SummaryPage = require("summarypage")
 
 ------------------------------------------------------------------------
 -- Menu-order injection
@@ -245,6 +246,13 @@ function Pilcrow:_downloadArticleTo(article)
     local ok, err_or_path, http_code = self.client:downloadEntry(article.id, fpath, "epub")
     if not ok then return false, err_or_path, http_code end
     self.cache:setLocalPath(article.id, fpath)
+    -- A summary generated before this (re)download — refetch, manual
+    -- generation while offline, pre-existing cache — goes straight
+    -- into the fresh file while it's guaranteed sidecar-free.
+    local cached = self.cache:get(article.id)
+    if cached and cached.summary and cached.summary ~= "" then
+        self:_maybeEmbedSummary(cached)
+    end
     return true, fpath
 end
 
@@ -933,6 +941,7 @@ function Pilcrow:handleRowAction(action, article, refresh_cb)
             os.remove(article.local_path)
         end
         self.cache:setFlag(id, "local_path", nil)
+        self.cache:setFlag(id, "summary_in_epub", nil)
         self:_pruneImageFor(id)
         self.cache:setFlag(id, "image_path", nil)
         self.cache:save()
@@ -946,6 +955,40 @@ end
 ------------------------------------------------------------------------
 -- Article summaries (LLM-generated, cached on the article entry)
 ------------------------------------------------------------------------
+
+--- Rewrite the article's EPUB so the cached summary is its first page.
+-- Hard requirement: never touch a document the user has opened —
+-- crengine addresses highlights and reading positions by DocFragment
+-- index (`/body/DocFragment[N]/…`), so inserting a page would shift
+-- every existing anchor. Such articles keep the popup summary only.
+-- Returns true when the page was (re)written into the EPUB.
+function Pilcrow:_maybeEmbedSummary(article)
+    if not self.settings:get("summary_embed_in_epub") then return false end
+    if not article or not article.summary or article.summary == "" then
+        return false
+    end
+    local path = article.local_path
+    if not path or path == "" or lfs.attributes(path, "mode") ~= "file" then
+        return false
+    end
+    if DocSettings:hasSidecarFile(path) then return false end
+    -- ffi/archiver ships with current KOReader; degrade to popup-only
+    -- summaries on builds that predate it.
+    local ok_arch, archiver = pcall(require, "ffi/archiver")
+    if not ok_arch then
+        logger.warn("pilcrow/summary: ffi/archiver unavailable; summary page skipped")
+        return false
+    end
+    local xhtml = SummaryPage.build_xhtml(article, article.summary, article.summary_model)
+    local ok, err = SummaryPage.inject(path, xhtml, { archiver = archiver })
+    if not ok then
+        logger.warn("pilcrow/summary: embed failed for", article.id, err)
+        return false
+    end
+    self.cache:setFlag(article.id, "summary_in_epub", true)
+    self.cache:save()
+    return true
+end
 
 function Pilcrow:showSummary(article)
     if article.summary and article.summary ~= "" then
@@ -990,6 +1033,7 @@ function Pilcrow:_generateSummary(article)
     self.cache:setFlag(article.id, "summary", result)
     self.cache:setFlag(article.id, "summary_model", cfg.model)
     self.cache:save()
+    self:_maybeEmbedSummary(self.cache:get(article.id))
     self:_showSummaryDialog(self.cache:get(article.id) or article)
 end
 
@@ -1455,6 +1499,7 @@ function Pilcrow:_refetchArticle(article)
         os.remove(article.local_path)
     end
     self.cache:setFlag(article.id, "local_path", nil)
+    self.cache:setFlag(article.id, "summary_in_epub", nil)
     self:_pruneImageFor(article.id)
     self.cache:setFlag(article.id, "image_path", nil)
     self.cache:save()

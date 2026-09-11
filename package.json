@@ -74,7 +74,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.1.4",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.0"
   },
   "private": true,
   "pnpm": {
